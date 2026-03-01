@@ -26,6 +26,31 @@ log_warn() { echo "  ! $*" >&2; }
 log_error() { echo "  ✗ $*" >&2; }
 log_header() { echo ""; echo "=== $* ==="; echo ""; }
 
+# --- Cleanup stack (replaces individual traps) ---
+
+CLEANUP_ACTIONS=()
+
+push_cleanup() {
+  CLEANUP_ACTIONS+=("$1")
+}
+
+pop_cleanup() {
+  local len=${#CLEANUP_ACTIONS[@]}
+  if [[ $len -gt 0 ]]; then
+    unset 'CLEANUP_ACTIONS[len-1]'
+  fi
+}
+
+run_cleanup() {
+  local i
+  for ((i=${#CLEANUP_ACTIONS[@]}-1; i>=0; i--)); do
+    eval "${CLEANUP_ACTIONS[i]}" 2>/dev/null || true
+  done
+  CLEANUP_ACTIONS=()
+}
+
+trap run_cleanup EXIT INT TERM
+
 # --- Prerequisite checks ---
 
 require_installed() {
@@ -104,15 +129,14 @@ atomic_swap() {
   local backup="$3"
 
   # shellcheck disable=SC2064
-  trap "if [ -d '$backup' ] && [ ! -d '$target' ]; then mv '$backup' '$target'; fi; rm -rf '$staging'" EXIT INT TERM
+  push_cleanup "if [ -d '$backup' ] && [ ! -d '$target' ]; then mv '$backup' '$target'; fi; rm -rf '$staging'"
 
   if [[ -d "$target" ]]; then
     mv "$target" "$backup"
   fi
   mv "$staging" "$target"
 
-  # Reset trap after success
-  trap - EXIT INT TERM
+  pop_cleanup
 }
 
 # --- Settings.json locking ---
@@ -156,12 +180,12 @@ acquire_lock() {
 
   echo $$ > "$LOCK_DIR/pid"
   # shellcheck disable=SC2064
-  trap "rm -rf '$LOCK_DIR'" EXIT INT TERM
+  push_cleanup "rm -rf '$LOCK_DIR'"
 }
 
 release_lock() {
   rm -rf "$LOCK_DIR"
-  trap - EXIT INT TERM
+  pop_cleanup
 }
 
 # --- Settings.json merge ---
@@ -384,7 +408,7 @@ cmd_install() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
   # shellcheck disable=SC2064
-  trap "rm -rf '$tmp_dir'" EXIT
+  push_cleanup "rm -rf '$tmp_dir'"
 
   curl -fsSL -o "$tmp_dir/$tarball_name" "$tarball_url"
   curl -fsSL -o "$tmp_dir/checksums.txt" "$checksums_url"
@@ -457,8 +481,8 @@ cmd_install() {
     verify_link_health || log_warn "Run 'spectra doctor' for details."
   fi
 
+  pop_cleanup
   rm -rf "$tmp_dir"
-  trap - EXIT
 }
 
 cmd_update() {
@@ -501,7 +525,7 @@ cmd_update() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
   # shellcheck disable=SC2064
-  trap "rm -rf '$tmp_dir'" EXIT
+  push_cleanup "rm -rf '$tmp_dir'"
 
   curl -fsSL -o "$tmp_dir/$tarball_name" "$tarball_url"
   curl -fsSL -o "$tmp_dir/checksums.txt" "$checksums_url"
@@ -541,8 +565,8 @@ cmd_update() {
   log_info "Updated: $current_version → $version"
   log_info "Run 'spectra rollback' to revert if needed"
 
+  pop_cleanup
   rm -rf "$tmp_dir"
-  trap - EXIT
 }
 
 cmd_rollback() {
