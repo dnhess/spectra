@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- SQLite hybrid storage foundation (`shared/tools/db-utils.sh`) with sessions table for cross-session metadata queries, WAL mode, and parameterized queries
+- Unified output validation pipeline (`shared/tools/validate-output.sh`) with 5-stage validation (size, JSON parse, schema, content sanitize, accept) in warn-only mode
+- Validation schemas for all skill phases (`shared/schemas/`) — 6 schema definitions for deep-design and decision-board agent outputs
+- Expanded failure mode table in shared orchestration (14 scenarios across 3 severity tiers: P0 session-fatal, P1 degraded, P2 recoverable)
+- Write-once enforcement for agent output files with creation timestamp verification
+- Schema versioning contract in `shared/event-schemas-base.md` with semantic versioning rules and compatibility guarantees
+- SQLite integrity check in `spectra doctor`
+- Test suites for db-utils (17 tests), validation pipeline (23 tests), and failure modes (13 tests)
+
+### Changed
+
+- Skill SKILL.md files now reference shared failure mode table instead of inline recovery descriptions
+- Agent output files validated through unified pipeline before event log writes (warn-only in Phase 1)
+- `spectra doctor` now checks SQLite database health
+
 ## [0.2.2] - 2026-03-01
 
 ### Fixed
