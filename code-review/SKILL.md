@@ -1517,3 +1517,353 @@ Files:
   {session_directory}/synthesis-brief.json
   {session_directory}/review-events.jsonl
 ```
+
+## Phase 6: Cleanup
+
+This phase MUST run even on errors — treat it as a try/finally block. If any earlier phase fails or times out, skip to Phase 6. Every code path must pass through cleanup before returning control to the user.
+
+### Remove Session Lock
+
+Delete `{session_directory}/session.lock`. If the file does not exist (already cleaned or never created), continue silently.
+
+### Write Manifest Entry
+
+Append a single-line JSON entry to `~/.claude/code-review-sessions/manifest.jsonl`. The entry includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus the domain-specific fields defined in `event-schemas.md`.
+
+Write the entry using the JSONL utility:
+
+```bash
+source ~/.claude/skills/shared/tools/jsonl-utils.sh
+```
+
+If the manifest file does not exist, create it.
+
+### Manifest Size Management
+
+After writing the manifest entry, check file size and entry count:
+
+1. If file size exceeds 500KB OR entry count exceeds 1000 lines, truncate the oldest entries
+2. Keep the most recent 750 entries (25% headroom below the 1000-entry limit)
+3. Use atomic write for truncation: write to a temp file, then rename over the original
+
+```bash
+line_count=$(wc -l < ~/.claude/code-review-sessions/manifest.jsonl)
+file_size=$(stat -f%z ~/.claude/code-review-sessions/manifest.jsonl 2>/dev/null || stat -c%s ~/.claude/code-review-sessions/manifest.jsonl 2>/dev/null)
+if [ "$line_count" -gt 1000 ] || [ "$file_size" -gt 512000 ]; then
+  tail -n 750 ~/.claude/code-review-sessions/manifest.jsonl > ~/.claude/code-review-sessions/manifest.jsonl.tmp
+  mv ~/.claude/code-review-sessions/manifest.jsonl.tmp ~/.claude/code-review-sessions/manifest.jsonl
+fi
+```
+
+### Generate handoff.md
+
+Write `{session_directory}/handoff.md` using atomic write (temp file then rename). The handoff provides a compact summary for future sessions or other skills that reference this review.
+
+Contents:
+
+- **Summary of findings**: Counts by severity (critical, major, minor, nit, withdrawn)
+- **Key recommendations**: Top 3-5 actionable items from the synthesis
+- **Commit hash**: The commit hash at time of review (from Phase 0 context)
+- **Technologies detected**: Language/framework list from scout output
+- **Review quality**: Full, Partial, or Minimal
+- **Session ID and timestamp**
+
+Content must be sanitized (no raw file contents, no secrets) and capped at 2000 characters. If the natural content exceeds 2000 characters, truncate recommendations to fit.
+
+```bash
+python3 -c "
+import json, os, tempfile
+handoff = '''# Code Review Handoff
+
+Session: {session_id}
+Date: {timestamp}
+Commit: {commit_hash}
+Quality: {quality}
+Technologies: {tech_list}
+
+## Findings Summary
+- Critical: {critical_count}
+- Major: {major_count}
+- Minor: {minor_count}
+- Nit: {nit_count}
+- Withdrawn: {withdrawn_count}
+
+## Key Recommendations
+{recommendations}
+'''
+# Enforce 2000-char cap
+handoff = handoff[:2000]
+tmp = tempfile.NamedTemporaryFile(mode='w', dir='{session_directory}', suffix='.tmp', delete=False)
+tmp.write(handoff)
+tmp.close()
+os.rename(tmp.name, '{session_directory}/handoff.md')
+"
+```
+
+### Write handoff_written Event
+
+Write a `handoff_written` event to the JSONL log:
+
+```json
+{
+  "type": "handoff_written",
+  "sequence": 44,
+  "session_id": "{session_id}",
+  "timestamp": "ISO-8601",
+  "handoff_path": "{session_directory}/handoff.md",
+  "char_count": 1847
+}
+```
+
+### Delete Active Session Sentinel
+
+Remove the `~/.claude/.active-code-review-session` sentinel file. This signals to future invocations that no review session is in progress.
+
+If the file does not exist, continue silently.
+
+### Post-Review Feedback
+
+Present a micro-survey to the user. This runs only on successful or partially successful reviews (not on total failure where no findings were produced).
+
+```
+Quick feedback on this review:
+
+1. Were these findings actionable? [y/n]
+2. Most valuable finding? (number or "none")
+3. Anything missing? (free text or "skip")
+```
+
+Wait for user response with a 5-minute timeout. If the user does not respond within the timeout, skip feedback collection.
+
+Store the response as a `feedback` event in the JSONL log:
+
+```json
+{
+  "type": "feedback",
+  "sequence": 45,
+  "session_id": "{session_id}",
+  "timestamp": "ISO-8601",
+  "actionable": true,
+  "most_valuable_finding": "F3",
+  "missing_feedback": "skip"
+}
+```
+
+Update the manifest entry by rewriting the line for this session with `feedback_actionable` populated. Use `python3` to read the manifest, find the matching session entry, update it, and write back atomically.
+
+### Stale Session Detection
+
+On the **next** invocation of the code-review skill (not during the current cleanup), check for stale sessions before starting a new review:
+
+1. Check if `~/.claude/.active-code-review-session` exists
+2. If it does, read the session directory path from it
+3. Check `session.lock` inside that directory for TTL expiration
+4. If the lock has expired (timestamp + TTL < now), the previous session is stale
+5. Clean up the stale session:
+   - Remove `session.lock`
+   - Remove `~/.claude/.active-code-review-session`
+   - Write a `session_end` event with quality `Abandoned` to the stale session's JSONL log
+   - Write a manifest entry with status `abandoned`
+6. Inform the user: "Cleaned up stale session from {timestamp}. Starting fresh."
+7. Proceed with the new review
+
+This check is part of Phase 0 — it runs before the confirmation gate.
+
+## Composition
+
+When reviewers deadlock on a finding during Phase 3 discussion, the moderator can invoke the decision-board skill to resolve the contested point.
+
+### Composition Flow
+
+1. **Detect deadlock**: The moderator identifies deadlock per the criteria in Phase 3's Deadlock Detection section (3+ rounds on the same finding with no movement toward agreement)
+2. **User approval gate**: Present the contested finding and ask the user for permission to invoke decision-board. If declined, mark the finding as `disputed` and move on
+3. **Write composition request**: Write `{session_directory}/composition-request.json` following the schema in `~/.claude/skills/shared/composition.md`
+4. **Invoke decision-board**: The decision-board skill runs at one tier below the parent review session (e.g., if the review is Deep, decision-board runs at Standard). If the review is already Quick, decision-board also runs at Quick
+5. **Receive result**: Decision-board writes `{session_directory}/synthesis-brief.json` (the composition response). Poll for this file with the standard timeout
+6. **Update finding**: The contested finding is updated with the decision outcome. The finding's `resolution` field is set to the decision-board verdict, and a `composition_completed` event is written to the JSONL log
+
+### Composition Limits
+
+- Maximum 1 composition invocation per session
+- If a second deadlock is detected after composition has already been used, mark the finding as `disputed` without invoking decision-board
+- Reference `~/.claude/skills/shared/composition.md` for the full composition protocol
+
+## Session State Machine
+
+```
+COLLECTING ──(quorum_met)──► DISCUSSING ──(convergence_trigger)──► CONVERGING ──(synthesis_done)──► TERMINATED
+     │                            │                                      │
+     └─────(timeout/error)────────┴──────────(timeout/error)─────────────┴───► TERMINATED
+```
+
+- **COLLECTING**: Opening reviews are being gathered (Phase 2). Transitions to DISCUSSING when quorum is met and all agents complete or timeout
+- **DISCUSSING**: Discussion rounds in progress (Phase 3). Transitions to CONVERGING when convergence criteria are met or max rounds exhausted. For Quick tier, this state is skipped entirely
+- **CONVERGING**: Final positions are collected and synthesis is produced (Phases 4-5). Transitions to TERMINATED when synthesis is complete
+- **TERMINATED**: Session is complete. Cleanup runs (Phase 6). This is the terminal state for all sessions, including those that error out
+
+Phase transitions are recorded as `phase_transition` events with `from`, `to`, and `trigger` fields. See `~/.claude/skills/shared/event-schemas-base.md` for the schema.
+
+## Hard Resource Limits
+
+| Control | Quick | Standard | Deep |
+|---|---|---|---|
+| Max core reviewers | 4 | 6 | 8 |
+| Max specialists | 0 | 2 | 4 |
+| Max total review agents | 4 | 8 | 12 |
+| Infrastructure agents | +1 synthesis | +1 synthesis | +1 synthesis |
+| Max discussion rounds | 0 | 1 | 2 |
+| Max session time | 5 min | 15 min | 30 min |
+| Phase timeouts | Scout: 60s, Opening: 120s, Synthesis: 60s | Scout: 60s, Research: 60s, Opening: 120s, Discussion: 90s/round, Final: 90s, Synthesis: 120s | Same as Standard with Discussion: 90s x 2 rounds |
+| Minimum quorum | 2 | 2 | 2 |
+| User prompt timeout | 5 min | 5 min | 5 min |
+
+Notes:
+
+- "Max total review agents" includes both core reviewers and specialists
+- "Infrastructure agents" (synthesis) are not counted against the review agent limit
+- Phase timeouts are per-phase wall-clock time measured by polling intervals
+- If any phase exceeds its timeout, the moderator moves to the next phase with whatever results are available
+- User prompt timeout applies to the confirmation gate, discussion control prompts, and feedback survey
+
+## Fault Tolerance
+
+### Timeout Handling
+
+File-polling timeouts are enforced per phase. When an agent does not produce its output file within the phase timeout:
+
+- Write an `agent_complete` event with `status: "timeout"` for the missing agent
+- If quorum is still met (2+ agents completed), continue to the next phase
+- If quorum is not met, trigger the below-quorum protocol
+
+### Below Quorum
+
+If fewer than 2 agents complete in any phase:
+
+1. Halt the review
+2. Inform the user: "Review halted — only {n} of {expected} reviewers responded. Minimum quorum is 2."
+3. Save all partial results to the session directory
+4. Write a `session_end` event with quality `Minimal`
+5. Proceed to Phase 6 cleanup
+
+### Graceful Degradation
+
+Every review session produces output, regardless of failures. Output is labeled with a quality indicator:
+
+- **Full**: All expected agents completed, all phases ran
+- **Partial**: Some agents timed out but quorum was met in all phases
+- **Minimal**: Below quorum in one or more phases, or a phase failed entirely
+
+The quality label appears in the `session_end` event, the manifest entry, the handoff, and the user-facing output.
+
+### Moderator Recovery
+
+Stale sessions are detected via lock file TTL (see Phase 6, Stale Session Detection). On next invocation:
+
+- Expired lock files are cleaned up
+- The stale session is marked as `abandoned` in the manifest
+- A new session starts cleanly
+
+### try/finally Guarantee
+
+Phase 6 cleanup always runs, even when earlier phases throw errors. The moderator wraps Phases 0-5 in error handling that ensures Phase 6 executes on any exit path:
+
+- Normal completion: Phase 6 runs after Phase 5
+- Phase timeout: Phase 6 runs after the timeout is handled
+- Below quorum: Phase 6 runs after the halt message
+- Unexpected error: Phase 6 runs in the error handler
+
+## Dynamic Specialists
+
+### Pre-Built Specialists
+
+Before generating a custom specialist, check `~/.claude/skills/code-review/personas/specialists/` for a matching pre-built persona. Available pre-built specialists:
+
+- `database-expert.md` — Database schema, query optimization, migrations
+- `api-designer.md` — API design, REST/GraphQL patterns, versioning
+- `concurrency-expert.md` — Thread safety, race conditions, async patterns
+- `frontend-architect.md` — Component architecture, state management, rendering
+- `infrastructure-reviewer.md` — CI/CD, Docker, deployment, IaC
+- `accessibility-auditor.md` — WCAG compliance, screen readers, keyboard navigation
+
+### Custom Specialist Generation
+
+If no pre-built specialist matches the detected technology or the review target's specific needs, generate a custom persona using this template:
+
+```
+You are a **{Specialist Title}** with deep expertise in {domain}.
+
+## Focus
+- **{Area 1}**: {what to look for}?
+- **{Area 2}**: {what to look for}?
+- **{Area 3}**: {what to look for}?
+
+## Voice
+{Communication style description}. "{example quote}."
+```
+
+Present the generated persona to the user for approval before spawning the agent. If the user rejects it, either revise based on feedback or proceed without the specialist.
+
+### Specialist Agent Config
+
+All specialists (pre-built and custom) use the same agent configuration:
+
+- Subagent type: `general-purpose` with `bypassPermissions`
+- Model: `opus`
+- Prompt: Specialist persona + the same review context given to core reviewers
+- Output: Same structured JSON format as core reviewer output
+
+## File Structure
+
+```
+~/.claude/skills/code-review/
+  SKILL.md
+  event-schemas.md
+  personas/
+    design-critic.md
+    performance-analyst.md
+    reliability-engineer.md
+    security-auditor.md
+    test-strategist.md
+    maintainability-advocate.md
+    specialists/
+      database-expert.md
+      api-designer.md
+      concurrency-expert.md
+      frontend-architect.md
+      infrastructure-reviewer.md
+      accessibility-auditor.md
+
+~/.claude/skills/shared/
+  orchestration.md
+  event-schemas-base.md
+  security.md
+  composition.md
+  tools/
+    jsonl-utils.sh
+
+~/.claude/code-review-sessions/
+  manifest.jsonl
+```
+
+## Deferred to V2
+
+- Cross-skill session history
+- Persistent agent memory across review sessions
+- Real-time progress streaming
+- TUI dashboard for review progress
+- JSONL hash chains for integrity
+- Platform-level read-only enforcement for scout
+- Inter-agent authentication
+- Data retention policy for session artifacts
+- Tier-aware quorum minimums (Quick: 2, Standard: 3, Deep: 5)
+- Manifest rotation and partitioning
+- Hands-off execution mode (batch all user decisions)
+- Auto-fix suggestions (generate patches, not just findings)
+
+## Unresolved Tensions
+
+1. **Quorum minimum of 2 across all tiers**: A Deep review degrading to 2 agents may not meet expectations despite being above quorum.
+2. **Lock file atomicity**: TTL-based detection without atomic lock acquisition. Race conditions theoretically possible in concurrent invocations.
+3. **Phase timeout enforcement**: No native timer in Claude Code. Relies on polling intervals + elapsed time checks.
+4. **WebSearch non-determinism**: Research results may vary between runs. No caching mechanism.
+5. **Scout read boundary enforcement**: Prompt-level only. No platform enforcement. Relies on agent compliance.
