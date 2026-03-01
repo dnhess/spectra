@@ -171,6 +171,7 @@ The moderator drives all phases directly. Agents write structured JSON files to 
 | Devil's Advocate | -- | If 3+ options | Always |
 | Economist | If cost-related | Always | Always |
 | Operator | -- | If infra/ops | Always |
+| End User Advocate | -- | If user-facing | Always |
 
 **Hard limits**: Minimum 2 agents. Maximum 6 core + 4 specialists = 10.
 
@@ -191,6 +192,9 @@ Specialists are selected at setup based on decision category (not mid-session):
 | API design decisions | `api-designer` |
 | Migration / transition planning | `migration-expert` |
 | Cloud / platform decisions | `platform-expert` |
+| Performance / reliability decisions | `performance-sre` |
+| Legal / regulatory concerns | `legal-compliance` |
+| Documentation / DX decisions | `technical-writer` |
 
 Specialist persona files live in `~/.claude/skills/decision-board/personas/specialists/`. Validate each file exists before spawning. Fail fast with a clear error if missing.
 
@@ -1042,6 +1046,7 @@ Stale sessions are detected by TTL expiration in the lock file, not by PID check
     devils-advocate.md        # The Devil's Advocate
     economist.md              # The Economist
     operator.md               # The Operator
+    end-user-advocate.md      # End User Advocate
     specialists/
       database-expert.md      # Storage/database decisions
       security-expert.md      # Security-sensitive decisions
@@ -1049,6 +1054,9 @@ Stale sessions are detected by TTL expiration in the lock file, not by PID check
       api-designer.md         # API design decisions
       migration-expert.md     # Migration/transition planning
       platform-expert.md      # Cloud/platform decisions
+      performance-sre.md      # Performance/reliability
+      legal-compliance.md     # Legal/regulatory
+      technical-writer.md     # Documentation/DX
 
 ~/.claude/skills/shared/
   orchestration.md            # Blackboard architecture protocol

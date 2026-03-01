@@ -816,43 +816,40 @@ Pre-built specialist templates live in `~/.claude/skills/deep-design/personas/sp
 - `distributed-systems.md` — Real-time & distributed systems
 - `mobile-native.md` — Mobile/native platform expertise
 - `privacy-legal.md` — GDPR, CCPA, privacy law
+- `performance-sre.md` — Performance engineering & SRE
+- `legal-compliance.md` — General legal & regulatory compliance
 
 ### Custom Specialists
 
 When a specialist NOT in the pre-built list is recommended:
 
-1. The moderator generates a full persona using this template:
+1. The moderator generates a persona using this template:
+
+<!-- markdownlint-disable MD031 -->
 ```
-You are a **{Specialist Title}** with deep expertise in {domain}.
+You are a **{Specialist Title}** — {one sentence establishing identity and motivation}.
 
-## Review Lens
-- {focus area 1}: {what to look for}
-- {focus area 2}: {what to look for}
-- {focus area 3}: {what to look for}
+## Focus
+- **{area 1}**: {what to look for}
+- **{area 2}**: {what to look for}
+- **{area 3}**: {what to look for}
 
-## Red Flags
-- {domain-specific concern 1}
-- {domain-specific concern 2}
-- {domain-specific concern 3}
-- {domain-specific concern 4}
-
-## Communication Style
-{brief description of how this specialist communicates}
-
-## Natural Collaborators
-- **{Agent 1}**: {collaboration context}
-- **{Agent 2}**: {collaboration context}
+## Voice
+{1-2 sentences on communication style with a signature question.}
 ```
+<!-- markdownlint-enable MD031 -->
 
 2. Show the generated persona to the user for approval:
+
+<!-- markdownlint-disable MD031 -->
 ```
 Specialist recommended: {Specialist Title}
 Focus: {brief description}
 Persona preview:
-  Review lens: {lens items}
-  Red flags: {flag items}
+  Focus areas: {focus items}
 Approve this specialist? [Y/n]
 ```
+<!-- markdownlint-enable MD031 -->
 
 3. Only spawn if the user approves. The specialist uses `general-purpose` subagent type with `bypassPermissions`.
 
@@ -945,16 +942,18 @@ Approve this specialist? [Y/n]
   SKILL.md                    # Main orchestration instructions (this file)
   event-schemas.md            # Domain-specific JSONL event type definitions
   personas/
-    pm.md                     # Principal PM
-    product-designer.md       # Principal Product Designer
-    fe-engineer.md            # Principal Frontend Engineer
-    be-engineer.md            # Principal Backend Engineer
+    pm.md                     # Product Manager
+    product-designer.md       # Product Designer
+    fe-engineer.md            # Frontend Engineer
+    be-engineer.md            # Backend Engineer
     security-expert.md        # Security Expert
     qa-expert.md              # QA Expert
     ceo-strategist.md         # CEO/Strategist
-    devops-engineer.md        # DevOps/Infrastructure Engineer
+    devops-engineer.md        # DevOps Engineer
     system-architect.md       # System Architect
-    data-engineer.md          # Data/Analytics Engineer
+    data-engineer.md          # Data Engineer
+    technical-writer.md       # Technical Writer
+    end-user-advocate.md      # End User Advocate
     specialists/
       hipaa-compliance.md     # Healthcare/HIPAA
       pci-dss.md              # Financial/PCI-DSS
@@ -964,6 +963,8 @@ Approve this specialist? [Y/n]
       distributed-systems.md  # Real-time/Distributed
       mobile-native.md        # Mobile/Native Platforms
       privacy-legal.md        # GDPR/CCPA/Privacy Law
+      performance-sre.md      # Performance/SRE
+      legal-compliance.md     # Legal/Regulatory Compliance
 
 ~/.claude/skills/shared/
   orchestration.md            # Blackboard architecture protocol
