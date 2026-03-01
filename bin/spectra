@@ -246,7 +246,7 @@ settings_backup() {
 
 get_spectra_permissions() {
   cat <<'PERMS'
-["Bash(mkdir -p ~/.spectra/sessions/*)","Bash(bash ~/.spectra/bin/json-write.sh *)","Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)","Write(~/.spectra/sessions/**)","Read(~/.spectra/sessions/**)","Glob(~/.spectra/sessions/**)","Write(~/.spectra/.active-*)"]
+["Bash(mkdir -p ~/.spectra/sessions/*)","Bash(bash ~/.spectra/bin/json-write.sh *)","Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)","Bash(bash ~/.claude/skills/shared/tools/db-utils.sh *)","Write(~/.spectra/sessions/**)","Read(~/.spectra/sessions/**)","Glob(~/.spectra/sessions/**)","Write(~/.spectra/.active-*)"]
 PERMS
 }
 
@@ -968,6 +968,25 @@ print(len(missing))
       issues=$((issues + 1))
     fi
   done
+
+  # SQLite database
+  if [[ -f "$SPECTRA_HOME/spectra.db" ]]; then
+    local db_utils="$SPECTRA_HOME/skills/shared/tools/db-utils.sh"
+    if [[ -f "$db_utils" ]]; then
+      local integrity_result
+      if integrity_result="$(DB_PATH="$SPECTRA_HOME/spectra.db" bash "$db_utils" integrity 2>&1)"; then
+        log_success "SQLite database OK ($integrity_result)"
+      else
+        log_warn "SQLite database integrity check failed: $integrity_result"
+        issues=$((issues + 1))
+      fi
+    else
+      log_warn "db-utils.sh not found — cannot check SQLite database"
+      issues=$((issues + 1))
+    fi
+  else
+    log_info "SQLite database not initialized (run a session to create)"
+  fi
 
   # Compatibility symlinks
   for skill in deep-design decision-board code-review; do

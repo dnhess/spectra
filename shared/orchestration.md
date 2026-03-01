@@ -39,6 +39,23 @@ Each session creates this directory structure:
 
 The event log filename is skill-specific (e.g., `review-events.jsonl` for deep-design, `decision-events.jsonl` for decision-board).
 
+## Hybrid Storage
+
+Session data uses two complementary storage layers:
+
+**SQLite (`~/.spectra/spectra.db`)** stores cross-session metadata for querying. The `sessions` table holds one row per completed session with fields for skill, project, tier, quality, duration, agent counts, and domain-specific metrics (convergence rate, consensus strength, etc.). Use `shared/tools/db-utils.sh` for all database operations.
+
+**Files remain the primary store for within-session data:**
+
+- JSONL event logs (append-only, moderator-written)
+- Agent output JSON files (one per agent per phase)
+- `synthesis-brief.json`, `session-state.md`, `handoff.md`
+- `session.lock`, `topics.json`, `composition-request.json`
+
+Files are the source of truth during a session. SQLite is the source of truth for cross-session queries (project history, prior session lookup, analytics).
+
+**Migration note:** During the transition period, SKILL.md phases should write session data to both the manifest JSONL file (backward compatibility) and the SQLite sessions table. Once all consumers migrate to SQLite queries, manifest writes become optional.
+
 ## Agent Prompt Template (Base)
 
 Every agent prompt across all skills follows this structure. Skills customize the task-specific sections.
@@ -93,6 +110,20 @@ Glob("{session_dir}/{phase_subdir}/*.json")
 - Poll every ~10 seconds (interleave with other moderator work between polls)
 - Check file count against expected agent count
 - When file count matches expected count (or timeout reached), phase is complete
+
+### Output Validation
+
+Before processing each agent output file, run it through the unified validation pipeline:
+
+```bash
+bash ~/.claude/skills/shared/tools/validate-output.sh <file> <phase> <skill> --warn-only
+```
+
+The pipeline runs 4 stages in order: size check (50KB cap), JSON parse (detects truncation), schema validate (required fields per phase/skill from `shared/schemas/`), and content sanitize (injection patterns from Layer 3 of `security.md`).
+
+**Phase 1 rollout**: All validation calls use `--warn-only` mode. Violations are logged in the ValidationResult JSON output but do not block processing. The moderator should log validation warnings as `security_violation` events with `severity: "warning"` when the pipeline returns exit code 2.
+
+**On failure (exit 1)**: If an agent file fails validation without `--warn-only`, exclude that agent's data from processing and log an `agent_complete` event with `status: "validation_failed"`. The session continues if quorum is still met. Truncated JSON failures are retriable once (re-poll for the file after a 10-second delay).
 
 ### Timeout Handling
 - **Opening round timeout**: 120 seconds (agents should complete in ~60s)
@@ -483,11 +514,13 @@ Each SKILL.md defines:
 ## Fault Tolerance
 
 ### Agent Timeout
+
 - Phase-specific timeouts (see Polling Protocol above)
 - If an agent file is missing at timeout, moderator writes an `agent_complete` event with `status: "timeout"`
 - Session continues if quorum is met
 
 ### Quality Computation
+
 Quality is computed deterministically from session outcomes:
 
 | Quality | Condition |
@@ -496,14 +529,63 @@ Quality is computed deterministically from session outcomes:
 | **Partial** | At least `ceil(n/2)` agents completed AND at least 1 topic resolved |
 | **Minimal** | Above quorum (2 agents) but below Partial thresholds |
 
-Where `n` is the number of agents in `session_start.agents`.
+Where `n` is the number of agents in `session_start.agents`. Skill-specific SKILL.md files may refine the Full/Partial conditions (e.g., decision-board adds consensus strength threshold) but the tier structure and quorum floor are shared.
 
 ### No Heartbeat Monitoring
+
 File-existence polling replaces heartbeat monitoring. There is no coordinator to monitor.
 
 ### No Coordinator Failure Mode
 
 With no coordinator, coordinator-failure is eliminated as a failure mode. The moderator (main Claude instance) drives the session directly and cannot "fail" independently.
+
+### Failure Modes
+
+All failure modes are classified into three severity tiers. Detection methods reference the validation pipeline (`shared/tools/validate-output.sh`) where applicable.
+
+#### P0 — Session-Fatal
+
+These failures halt the session immediately. The moderator saves whatever partial results exist and informs the user.
+
+| Failure Mode | Detection | Recovery | Event | Retriable |
+|---|---|---|---|---|
+| Below quorum | Agent count < 2 after timeouts/exclusions | Halt session, save partial results, set quality `Minimal` | `session_end` with `quality: "Minimal"` | No |
+| Session directory inaccessible | Moderator cannot create or write to session dir | Immediate failure, inform user | None (cannot write events) | No |
+| Event log write failure (persistent) | Python3 write raises exception on retry | Halt session, partial results may exist in agent files only | None (log unavailable) | No |
+| Disk full | `OSError: [Errno 28]` on any file write | Halt session, inform user to free disk space | None (cannot write) | No |
+
+#### P1 — Degraded-but-Continuing
+
+These failures degrade session quality but do not halt it. The session continues with remaining agents/data.
+
+| Failure Mode | Detection | Recovery | Event | Retriable |
+|---|---|---|---|---|
+| Agent timeout | File-polling timeout per phase | Write `agent_complete` with `status: "timeout"`, continue if quorum met | `agent_complete` | No |
+| Agent output validation failure | `validate-output.sh` returns exit 1 (schema or sanitization) | Exclude agent data from processing, continue if quorum met | `agent_complete` with `status: "validation_failed"` | No |
+| Agent output overwrite (write-once violation) | Pre-phase file snapshot shows file already exists before agent spawn | Log violation, use original file (first write wins) | `security_violation` with `type: "write_once_violation"` | No |
+| Wrong-path write | Post-phase directory audit detects file outside phase allowlist | Log violation, exclude file from processing | `security_violation` with `type: "unexpected_file"` or `"path_escape"` | No |
+| Content injection detected | `validate-output.sh` content sanitization stage flags patterns | Exclude agent data from synthesis, continue with remaining agents | `security_violation` with `type: "content_injection"` | No |
+| Synthesis agent failure | No output file after synthesis agent timeout | Re-spawn synthesis agent once; if second failure, produce partial output | `agent_complete` with `status: "timeout"` | Once |
+| Context budget breach | Moderator detects prompt size exceeds tier budget before agent spawn | Reduce agent count or truncate context; log warning | `phase_transition` with `degraded: true` | No |
+
+#### P2 — Recoverable
+
+These failures can be retried and typically succeed on the second attempt.
+
+| Failure Mode | Detection | Recovery | Event | Retriable |
+|---|---|---|---|---|
+| Truncated JSON (partial write) | `validate-output.sh` JSON parse stage detects incomplete JSON | Re-poll after 10-second delay; if still invalid, treat as validation failure (P1) | `agent_complete` with `status: "validation_failed"` on final failure | Once |
+| Event log write failure (transient) | Python3 write raises exception (first attempt) | Retry write once | None if retry succeeds | Once |
+| Stale session lock | Lock file TTL expired | Clean up lock, log warning, proceed | `session_start` (normal) | N/A |
+| Permission denied on agent file read | `PermissionError` when moderator reads agent output | Log warning, treat as agent timeout | `agent_complete` with `status: "read_error"` | No |
+
+### Write-Once Enforcement
+
+Agent output files follow a write-once rule: each expected file path (`{phase_subdir}/{agent-name}.json`) must not exist before the agent is spawned.
+
+**Detection**: Before spawning agents for a phase, the moderator takes a directory snapshot (Glob). After the phase, the moderator diffs the snapshot. If a file that existed pre-spawn was modified (creation timestamp earlier than spawn time), this is a write-once violation.
+
+**Response**: Log a `security_violation` event with `type: "write_once_violation"`. Use the original file content (first write wins). Do not re-read the overwritten version.
 
 ## Skill Composition
 
