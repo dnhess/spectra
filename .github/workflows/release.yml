@@ -20,11 +20,7 @@ jobs:
       - uses: ludeeus/action-shellcheck@master
         with:
           scandir: "."
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm install --save-dev @commitlint/cli @commitlint/config-conventional
-      - run: npx commitlint --from HEAD~1
+      # commitlint runs in CI on PRs — skip on tag pushes (shallow clone breaks HEAD~1)
 
   release:
     name: Build & Release
