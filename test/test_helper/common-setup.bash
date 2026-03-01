@@ -267,3 +267,58 @@ print(json.dumps({
     'session_dirname': None
 }))"
 }
+
+# ---------------------------------------------------------------------------
+# Update / release test helpers
+# ---------------------------------------------------------------------------
+
+# Create a fake release tarball mimicking a GitHub release asset.
+# Sets env vars: SPECTRA_TEST_TAG, SPECTRA_TEST_TARBALL, SPECTRA_TEST_CHECKSUMS
+#
+# Usage: create_fake_tarball <output_dir> <tag>
+#   output_dir — directory where tarball and checksums.txt are written
+#   tag        — release tag, e.g. "v0.3.0"
+create_fake_tarball() {
+  local output_dir="$1"
+  local tag="$2"
+  mkdir -p "$output_dir"
+
+  # Build a directory tree that matches what the installer expects
+  local staging="$output_dir/staging"
+  mkdir -p "$staging"/{shared/tools,bin}
+  touch "$staging/shared/orchestration.md"
+
+  for skill in deep-design decision-board code-review; do
+    mkdir -p "$staging/$skill/personas"
+    echo "# $skill SKILL.md ($tag)" > "$staging/$skill/SKILL.md"
+  done
+
+  # bin files
+  cp "$PROJECT_ROOT/bin/spectra" "$staging/bin/spectra"
+  chmod +x "$staging/bin/spectra"
+  if [[ -f "$PROJECT_ROOT/bin/json-write.sh" ]]; then
+    cp "$PROJECT_ROOT/bin/json-write.sh" "$staging/bin/json-write.sh"
+    chmod +x "$staging/bin/json-write.sh"
+  fi
+
+  # Create tarball
+  local tarball_name="spectra-${tag}.tar.gz"
+  tar -czf "$output_dir/$tarball_name" -C "$staging" .
+
+  # Create checksums file
+  local checksum_cmd
+  if command -v sha256sum >/dev/null 2>&1; then
+    checksum_cmd="sha256sum"
+  else
+    checksum_cmd="shasum -a 256"
+  fi
+  (cd "$output_dir" && $checksum_cmd "$tarball_name" > checksums.txt)
+
+  # Clean up staging
+  rm -rf "$staging"
+
+  # Export env vars for the test shim
+  export SPECTRA_TEST_TAG="$tag"
+  export SPECTRA_TEST_TARBALL="$output_dir/$tarball_name"
+  export SPECTRA_TEST_CHECKSUMS="$output_dir/checksums.txt"
+}
