@@ -52,7 +52,11 @@ conn.close()
   bash "$PROJECT_ROOT/shared/tools/db-utils.sh" init
 
   local perms
-  perms="$(stat -f '%Lp' "$SPECTRA_HOME/spectra.db" 2>/dev/null || stat -c '%a' "$SPECTRA_HOME/spectra.db" 2>/dev/null)"
+  if [[ "$(uname)" == "Darwin" ]]; then
+    perms="$(stat -f '%Lp' "$SPECTRA_HOME/spectra.db")"
+  else
+    perms="$(stat -c '%a' "$SPECTRA_HOME/spectra.db")"
+  fi
   [ "$perms" = "600" ]
 }
 
