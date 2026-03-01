@@ -969,7 +969,7 @@ Team teardown (TeamDelete) already happened in Phase 5 step 5. This phase handle
 Append one entry per session to `~/.claude/decision-board-sessions/manifest.jsonl`:
 
 ```jsonl
-{"session_id":"...","timestamp":"ISO-8601","decision_question":"...","options":["..."],"tier":"standard","agent_count":5,"specialist_count":1,"quality":"Full","duration_seconds":360,"rounds_debated":2,"consensus_strength":0.78,"recommended_option":"hybrid","adopted_option":null,"concessions_count":2,"dissenting_agents_count":1,"feedback_rating":null,"parent_composition_id":null,"parent_session_id":null}
+{"session_id":"...","timestamp":"ISO-8601","project":"my-app","decision_question":"...","options":["..."],"tier":"standard","agent_count":5,"specialist_count":1,"quality":"Full","duration_seconds":360,"rounds_debated":2,"consensus_strength":0.78,"recommended_option":"hybrid","adopted_option":null,"concessions_count":2,"dissenting_agents_count":1,"feedback_rating":null,"parent_composition_id":null,"parent_session_id":null}
 ```
 
 This enables historical tracking and informed tier suggestions at the confirmation gate.

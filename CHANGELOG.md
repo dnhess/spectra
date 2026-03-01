@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `project` field on cross-session manifest entries for both deep-design and decision-board — captures the working directory basename at invocation time, enabling per-project filtering of session history
+- **Cross-session manifest base schema** (`shared/event-schemas-base.md`) — common manifest fields (`session_id`, `timestamp`, `project`, `tier`, `agent_count`, `specialist_count`, `quality`, `duration_seconds`, `feedback_rating`) extracted into shared base; each skill's `event-schemas.md` now defines only domain-specific manifest fields
 - **Skill composition protocol** (`shared/composition.md`) — generic protocol enabling any skill to invoke another skill mid-session with sequential composition, user gating, and tier downgrade
 - **Inline mini-debate** — deep-design can now invoke decision-board to resolve deadlocked discussion topics via `[d] Deliberate` option at the escalation prompt
 - `composition_invoked` and `composition_completed` event types in `shared/event-schemas-base.md`

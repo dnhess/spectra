@@ -225,19 +225,12 @@ Where `n` is the number of agents in `session_start.agents`.
 
 ## Cross-Session Manifest Schema
 
-Each entry in `~/.claude/deep-design-sessions/manifest.jsonl` has this schema:
+Each entry in `~/.claude/deep-design-sessions/manifest.jsonl` includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus these domain-specific fields:
 
 ```json
 {
-  "session_id": "deep-design-{topic}-{timestamp}",
-  "timestamp": "ISO-8601",
   "document": "path/to/document",
   "document_type": "product_spec | technical_architecture | full_design",
-  "tier": "quick | standard | deep",
-  "agent_count": 7,
-  "specialist_count": 1,
-  "quality": "Full | Partial | Minimal",
-  "duration_seconds": 480,
   "topics_total": 4,
   "topics_resolved": 3,
   "topics_escalated": 1,
@@ -246,14 +239,12 @@ Each entry in `~/.claude/deep-design-sessions/manifest.jsonl` has this schema:
   "findings_critical": 3,
   "findings_major": 7,
   "findings_minor": 2,
-  "feedback_rating": "very_helpful | somewhat_helpful | not_helpful | null",
   "feedback": null,
   "compositions_invoked": 0,
   "composition_ids": []
 }
 ```
 
-Fields `feedback_rating` and `feedback` are nullable (populated after user provides post-review feedback).
-
+- `feedback`: Nullable freeform feedback text (populated after user provides post-review feedback).
 - `compositions_invoked`: Number of skill compositions invoked during the session (0 or 1).
 - `composition_ids`: Array of `composition_id` strings from any `composition_invoked` events. Empty array if no compositions.

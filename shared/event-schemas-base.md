@@ -205,6 +205,36 @@ Written by the parent skill's moderator after the child skill finishes. Pairs wi
 | `outcome_summary` | String | Human-readable summary of the child's result |
 | `parent_event_id` | String | `event_id` of the corresponding `composition_invoked` event |
 
+## Cross-Session Manifest Base Schema
+
+Every manifest entry MUST include these common fields. Domain-specific fields are defined in each skill's `event-schemas.md`.
+
+```json
+{
+  "session_id": "{skill}-{topic}-{timestamp}",
+  "timestamp": "ISO-8601",
+  "project": "basename of working directory at invocation time",
+  "tier": "quick | standard | deep",
+  "agent_count": 7,
+  "specialist_count": 1,
+  "quality": "Full | Partial | Minimal",
+  "duration_seconds": 480,
+  "feedback_rating": "very_helpful | somewhat_helpful | not_helpful | null"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | String | Session identifier, matches `session_start.session_id` |
+| `timestamp` | String | ISO 8601 UTC timestamp of session completion |
+| `project` | String | Basename of the working directory at invocation time (e.g., `my-app`). Enables per-project filtering of session history |
+| `tier` | String | Session tier (`quick`, `standard`, or `deep`) |
+| `agent_count` | Integer | Number of agents used |
+| `specialist_count` | Integer | Number of specialist agents used |
+| `quality` | String | Session quality (`Full`, `Partial`, or `Minimal`) |
+| `duration_seconds` | Integer or null | Wall-clock duration of the session |
+| `feedback_rating` | String or null | Post-session user rating. Nullable (populated after user provides feedback) |
+
 ## JSONL Write Semantics
 
 - **Single writer**: The moderator writes ALL events throughout the entire session. No writer handoff.

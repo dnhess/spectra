@@ -335,32 +335,23 @@ Where `n` is the number of agents in `session_start.agents`.
 
 ## Cross-Session Manifest Schema
 
-Each entry in `~/.claude/decision-board-sessions/manifest.jsonl` has this schema:
+Each entry in `~/.claude/decision-board-sessions/manifest.jsonl` includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus these domain-specific fields:
 
 ```json
 {
-  "session_id": "decision-board-{topic}-{timestamp}",
-  "timestamp": "ISO-8601",
   "decision_question": "Should we use a monorepo or polyrepo?",
   "options": ["monorepo", "polyrepo", "hybrid"],
-  "tier": "quick | standard | deep",
-  "agent_count": 4,
-  "specialist_count": 1,
-  "quality": "Full | Partial | Minimal",
-  "duration_seconds": 360,
   "rounds_debated": 3,
   "consensus_strength": 0.78,
   "recommended_option": "hybrid",
   "concessions_count": 2,
   "dissenting_agents_count": 1,
-  "feedback_rating": "very_helpful | somewhat_helpful | not_helpful | null",
   "adopted_option": "hybrid | null",
   "parent_composition_id": null,
   "parent_session_id": null
 }
 ```
 
-Fields `feedback_rating` and `adopted_option` are nullable. `feedback_rating` and `adopted_option` are populated after user provides post-decision feedback.
-
+- `adopted_option`: Nullable. Populated after user provides post-decision feedback.
 - `parent_composition_id`: If this session was invoked via composition, the `composition_id` from the parent. `null` for standalone sessions.
 - `parent_session_id`: If this session was invoked via composition, the parent skill's `session_id`. `null` for standalone sessions.
