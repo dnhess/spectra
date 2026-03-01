@@ -5,7 +5,7 @@
     "prepare": "husky",
     "lint": "markdownlint-cli2 '**/*.md' '#node_modules' '#.claude' '#docs/plans'",
     "lint:commits": "commitlint --from HEAD~1",
-    "lint:shell": "shellcheck bin/spectra bin/json-write.sh shared/tools/jsonl-utils.sh install.sh",
+    "lint:shell": "shellcheck bin/spectra bin/json-write.sh shared/tools/jsonl-utils.sh shared/tools/validate-output.sh shared/tools/db-utils.sh install.sh",
     "test": "bats test/"
   },
   "devDependencies": {

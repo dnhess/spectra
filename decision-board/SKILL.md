@@ -404,7 +404,7 @@ The moderator drives this phase directly:
 1. **Spawn all debate agents in parallel** (except Devil's Advocate), each instructed to write their stance to `opening/{agent-name}.json`
 2. **Poll `opening/*.json` using Glob** every ~10 seconds
 3. **Devil's Advocate special handling**: When all other agents' files have arrived (or timeout), read their stances. Then spawn the Devil's Advocate agent with all other stances as input, instructed to write to `opening/devils-advocate.json`. Poll for the Devil's Advocate file separately.
-4. **When all files arrive** (or timeout at 120s): read each file, write `stance` and `agent_complete` events to the JSONL log
+4. **When all files arrive** (or timeout at 120s): read each file. Before writing events, validate each file through the unified validation pipeline: `bash ~/.claude/skills/shared/tools/validate-output.sh <file> opening decision-board --warn-only`. In Phase 1 (warn-only mode), log any validation warnings but continue processing. See `shared/orchestration.md` > Output Validation for failure handling.
 5. **Post-phase directory audit**: Snapshot the session directory before and after the phase. Any unexpected files are flagged as a `security_violation` event.
 6. **Write checkpoint**: Write `session-state.md` with stance distribution per Persistence Protocol. Log `checkpoint_written` event.
 7. **Present stance distribution to user** with interactive options
@@ -526,7 +526,7 @@ The moderator drives debate directly using fresh agents per round:
    - Key disagreements and challenges from prior rounds
    - Instruction to write `discussion/round-{n}/{agent-name}.json`
 3. **Poll for files** using Glob every ~10 seconds
-4. **Read results**, write `challenge` events to the JSONL log. Detect concessions (when an agent's preferred option differs from their previous stance) and write `concession` events.
+4. **Read results**. Before writing events, validate each file: `bash ~/.claude/skills/shared/tools/validate-output.sh <file> discussion decision-board --warn-only`. Log validation warnings but continue processing in warn-only mode. Write `challenge` events to the JSONL log. Detect concessions (when an agent's preferred option differs from their previous stance) and write `concession` events.
 5. **Compute `consensus_check` event**: tally votes weighted by confidence
 6. **Check convergence triggers** (see Convergence section)
 7. **Post-phase directory audit**
@@ -684,7 +684,7 @@ Once debate concludes:
 
 0. **Write checkpoint**: Write `session-state.md` with final stance distributions per Persistence Protocol before spawning final-position agents. Log `checkpoint_written` event. Standard and Deep tiers only.
 
-1. **Spawn final-position agents** in parallel, each instructed to write to `final-positions/{agent-name}.json`. Poll for files, read results, write `final_position` events.
+1. **Spawn final-position agents** in parallel, each instructed to write to `final-positions/{agent-name}.json`. Poll for files, read results. Before writing `final_position` events, validate each file: `bash ~/.claude/skills/shared/tools/validate-output.sh <file> final-positions decision-board --warn-only`. Log validation warnings but continue processing in warn-only mode.
 
 ### Final Position Agent Prompt Template
 
@@ -1032,47 +1032,21 @@ Stale sessions are detected by TTL expiration in the lock file, not by PID check
 
 ## Fault Tolerance
 
-### Agent Failures
-- **Timeout**: File-polling timeouts per phase (see `~/.claude/skills/shared/orchestration.md` for polling protocol). If an agent file is missing at timeout, the moderator writes an `agent_complete` event with status `timeout` and continues if quorum is met.
-- **Below quorum** (< 2 active agents): Halt debate, inform user, save partial results
-- **Graceful degradation**: Always produce output. Label with: `Full` (all agents) / `Partial` (some lost) / `Minimal` (at quorum). Quality computed per formula in `event-schemas.md`.
+All failure modes, severity tiers (P0/P1/P2), detection methods, and recovery procedures are defined in `~/.claude/skills/shared/orchestration.md` under "Failure Modes". This section covers decision-board-specific overrides only.
 
-### Quality Computation
+### Quality Computation (decision-board)
 
 `session_end.quality` is computed deterministically:
+
 - **Full**: All selected agents completed all phases AND consensus_strength >= threshold (or Quick tier completed)
 - **Partial**: At least `ceil(n/2)` agents completed AND a `decision_proposed` event exists
 - **Minimal**: Above quorum (2 agents) but below Partial thresholds
 
 ### Moderator Recovery
+
 - **Stale sessions**: Detect via lock file TTL, clean up on next invocation
 - **Event log**: `decision-events.jsonl` is append-only and serves as a durable event log
 - **try/finally cleanup**: TeamDelete always runs, even on errors
-
-## Error Handling & Recovery
-
-### Recoverable Errors
-
-| Error | Detection | Recovery |
-|---|---|---|
-| Agent unresponsive | Phase timeout (file not written) | Write `agent_complete` event with status `timeout`, continue with remaining agents |
-| Malformed agent output | JSON parse failure on agent file | Log warning, exclude agent from this phase, continue |
-| JSONL write failure | Python3 write exception | Retry once, then fail-fast with partial data |
-| Synthesis agent failure | Moderator detects no output file | Re-spawn synthesis agent once; if second failure, produce partial output |
-
-### Non-Recoverable Errors (Session-Fatal)
-
-| Error | Detection | Response |
-|---|---|---|
-| Below quorum | Agent count < 2 | Halt debate, save partial results, inform user |
-| Session directory inaccessible | Moderator cannot write JSONL | Immediate failure, inform user |
-
-### Error UX Principles
-
-- Always produce output, even partial — something is better than nothing
-- Never lose data — JSONL is append-only
-- Inform the user of degradation — quality labels (Full/Partial/Minimal) are honest
-- Cleanup always runs — lock file removal and manifest append happen regardless
 
 ## Key Principles
 

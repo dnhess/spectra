@@ -1,0 +1,10 @@
+{
+  "required_fields": {
+    "agent": "string",
+    "recommendation": "string",
+    "confidence": "number",
+    "conditions": "array",
+    "option_rankings": "array"
+  },
+  "description": "Decision-board final position debate output"
+}

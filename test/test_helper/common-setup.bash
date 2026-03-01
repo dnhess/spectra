@@ -74,6 +74,7 @@ bootstrap_installed_state() {
       "Bash(mkdir -p ~/.spectra/sessions/*)",
       "Bash(bash ~/.spectra/bin/json-write.sh *)",
       "Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)",
+      "Bash(bash ~/.claude/skills/shared/tools/db-utils.sh *)",
       "Write(~/.spectra/sessions/**)",
       "Read(~/.spectra/sessions/**)",
       "Glob(~/.spectra/sessions/**)",

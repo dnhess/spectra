@@ -47,6 +47,8 @@ Before and after each major phase (opening, discussion, final positions), the mo
 
 **Persistence files**: `session-state.md` and `handoff.md` are allowed in ALL phases. These are written only by the moderator and must appear in directory audit allowlists for every phase.
 
+**SQLite WAL sidecar files**: `spectra.db-wal` and `spectra.db-shm` may appear alongside `spectra.db` in `~/.spectra/`. These are standard SQLite WAL mode artifacts and should not be flagged as security violations during directory audits.
+
 4. **Unexpected files** → log a `security_violation` event (type: `unexpected_file`)
 5. **Path escapes** (files outside session directory) → log `security_violation` (type: `path_escape`) and halt session
 

@@ -1,0 +1,11 @@
+{
+  "required_fields": {
+    "agent": "string",
+    "preferred_option": "string",
+    "confidence": "number",
+    "challenges": "array",
+    "concession": "nullable",
+    "reasoning": "string"
+  },
+  "description": "Decision-board discussion round challenge output"
+}
