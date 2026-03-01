@@ -284,6 +284,71 @@ remove_spectra_symlinks() {
   done
 }
 
+# --- Post-link health check ---
+
+verify_link_health() {
+  local source_base="${1:-$SKILLS_DIR}"
+  local issues=0
+
+  # Check each known skill has a valid symlink
+  for skill in "${KNOWN_SKILLS[@]}"; do
+    local link="$CLAUDE_SKILLS_DIR/$skill"
+    if [[ ! -L "$link" ]]; then
+      log_warn "Smoke test: $skill symlink missing"
+      issues=$((issues + 1))
+    elif [[ ! -d "$(readlink "$link")" ]]; then
+      log_warn "Smoke test: $skill symlink broken"
+      issues=$((issues + 1))
+    fi
+  done
+
+  # Check shared/orchestration.md exists
+  local orch_path="$CLAUDE_SKILLS_DIR/shared/orchestration.md"
+  if [[ ! -f "$orch_path" ]]; then
+    log_warn "Smoke test: shared/orchestration.md missing"
+    issues=$((issues + 1))
+  fi
+
+  # Check each non-shared skill has SKILL.md and personas/
+  for skill in "${KNOWN_SKILLS[@]}"; do
+    [[ "$skill" == "shared" ]] && continue
+    local skill_dir="$CLAUDE_SKILLS_DIR/$skill"
+    if [[ -d "$skill_dir" ]]; then
+      if [[ ! -f "$skill_dir/SKILL.md" ]]; then
+        log_warn "Smoke test: $skill/SKILL.md missing"
+        issues=$((issues + 1))
+      fi
+      if [[ ! -d "$skill_dir/personas" ]]; then
+        log_warn "Smoke test: $skill/personas/ missing"
+        issues=$((issues + 1))
+      fi
+    fi
+  done
+
+  # Check session directories are writable
+  for skill in deep-design decision-board code-review; do
+    local dir="$SESSIONS_DIR/$skill"
+    if [[ -d "$dir" ]] && [[ ! -w "$dir" ]]; then
+      log_warn "Smoke test: $dir not writable"
+      issues=$((issues + 1))
+    fi
+  done
+
+  # Check json-write.sh is executable
+  if [[ ! -x "$BIN_DIR/json-write.sh" ]]; then
+    log_warn "Smoke test: json-write.sh not executable"
+    issues=$((issues + 1))
+  fi
+
+  if [[ "$issues" -eq 0 ]]; then
+    log_success "Health check passed"
+    return 0
+  else
+    log_warn "Health check: $issues issue(s) found"
+    return 1
+  fi
+}
+
 # --- Commands ---
 
 cmd_install() {
@@ -386,6 +451,11 @@ cmd_install() {
   log_info "Version: $version"
   log_info "Skills:  ${KNOWN_SKILLS[*]}"
   log_info "Home:    $SPECTRA_HOME"
+
+  # Post-install smoke test
+  if [[ "${SPECTRA_NO_VERIFY:-}" != "1" ]]; then
+    verify_link_health || log_warn "Run 'spectra doctor' for details."
+  fi
 
   rm -rf "$tmp_dir"
   trap - EXIT
@@ -529,7 +599,7 @@ cmd_uninstall() {
   if [[ -d "$SESSIONS_DIR" ]] && [[ "$(ls -A "$SESSIONS_DIR" 2>/dev/null)" ]]; then
     echo ""
     read -rp "  Delete session data? (y/N) " delete_sessions
-    if [[ "${delete_sessions,,}" == "y" ]]; then
+    if [[ "$delete_sessions" == [yY] ]]; then
       rm -rf "$SESSIONS_DIR"
       log_success "Session data deleted"
     else
@@ -638,6 +708,11 @@ print()
   log_header "Dev Mode Active"
   log_info "Linked to: $repo_path"
   log_info "Run 'spectra unlink' to revert to release mode"
+
+  # Post-link smoke test
+  if [[ "${SPECTRA_NO_VERIFY:-}" != "1" ]]; then
+    verify_link_health "$repo_path" || log_warn "Run 'spectra doctor' for details."
+  fi
 }
 
 cmd_unlink() {
