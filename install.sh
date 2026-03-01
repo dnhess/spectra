@@ -21,23 +21,68 @@ detect_checksum_cmd() {
   fi
 }
 
+preflight_checks() {
+  # 1. Bash version
+  [[ "${BASH_VERSINFO[0]}" -ge 3 ]] || die "Bash >= 3.2 required (found ${BASH_VERSION})"
+
+  # 2. curl
+  command -v curl >/dev/null 2>&1 || die "curl is required"
+
+  # 3. Already installed
+  if [[ -d "$SPECTRA_HOME" ]]; then
+    die "Spectra is already installed at $SPECTRA_HOME. Use 'spectra update' instead."
+  fi
+
+  # 4. Disk space (need at least 5MB free in $HOME)
+  local avail_kb
+  avail_kb=$(df -k "$HOME" | awk 'NR==2{print $4}')
+  if [[ "$avail_kb" -lt 5120 ]]; then
+    die "Insufficient disk space: ${avail_kb}KB available, need at least 5MB"
+  fi
+
+  # 5. Write permissions
+  local test_file="$HOME/.spectra-install-test-$$"
+  if ! touch "$test_file" 2>/dev/null; then
+    die "Cannot write to \$HOME ($HOME)"
+  fi
+  rm -f "$test_file"
+
+  # 6. Network connectivity
+  if ! curl --max-time 5 -fsSL -o /dev/null "https://api.github.com" 2>/dev/null; then
+    die "Cannot reach api.github.com — check network connectivity"
+  fi
+
+  # 7. python3 version
+  if command -v python3 >/dev/null 2>&1; then
+    local py_version
+    py_version="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+    local py_major py_minor
+    py_major="${py_version%%.*}"
+    py_minor="${py_version#*.}"
+    if [[ "$py_major" -lt 3 ]] || { [[ "$py_major" -eq 3 ]] && [[ "$py_minor" -lt 6 ]]; }; then
+      warn "python3 version $py_version detected — Spectra requires >= 3.6"
+    fi
+  else
+    warn "python3 not found — skills require it at runtime"
+  fi
+
+  # 8. Existing settings.json
+  local settings_file="$HOME/.claude/settings.json"
+  if [[ -f "$settings_file" ]]; then
+    if ! python3 -c "import json; json.load(open('$settings_file'))" 2>/dev/null; then
+      die "Existing $settings_file is not valid JSON — fix it before installing"
+    fi
+  fi
+}
+
 main() {
   echo ""
   echo "=== Spectra Installer ==="
   echo ""
 
-  # Pre-flight
-  [[ "${BASH_VERSINFO[0]}" -ge 3 ]] || die "Bash >= 3.2 required (found ${BASH_VERSION})"
-  command -v curl >/dev/null 2>&1 || die "curl is required"
-  if ! command -v python3 >/dev/null 2>&1; then
-    warn "python3 not found — skills require it at runtime"
-  fi
+  preflight_checks
   local checksum_cmd
   checksum_cmd="$(detect_checksum_cmd)"
-
-  if [[ -d "$SPECTRA_HOME" ]]; then
-    die "Spectra is already installed at $SPECTRA_HOME. Use 'spectra update' instead."
-  fi
 
   # Fetch latest release
   info "Fetching latest release..."
