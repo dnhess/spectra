@@ -12,3 +12,21 @@ MD024:
 
 # Allow trailing punctuation in headings (e.g., "Phase 3: Opening Round")
 MD026: false
+
+# Persona files start with "You are..." — no heading required
+MD041: false
+
+# Ordered lists use continued numbering across interrupted blocks (2. 3. 4. etc.)
+MD029: false
+
+# Dense technical docs — don't require blank lines around headings, lists, fences, tables
+MD022: false
+MD031: false
+MD032: false
+MD058: false
+
+# Many code blocks are pseudo-code, prompt templates, or directory trees — no language tag
+MD040: false
+
+# Table pipe spacing style varies across files — not worth enforcing
+MD060: false
