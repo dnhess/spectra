@@ -12,9 +12,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simplified all persona files to ~10-15 lines (identity + focus + voice format)
 - Removed Red Flags, Natural Collaborators, and boilerplate from all personas
 - Updated custom specialist template in deep-design SKILL.md to match simplified format
+- Session paths migrated from `~/.claude/{skill}-sessions/` to `~/.spectra/sessions/{skill}/`
+- Permission `Bash(python3 -c *)` replaced with `Bash(bash ~/.spectra/bin/json-write.sh *)`
+- `install.sh` rewritten from symlink creator to full curl-pipe-bash installer
+- Installation uses `~/.spectra/` as home directory with symlinks into `~/.claude/skills/`
 
 ### Added
 
+- Bats-based functional test suite for CLI commands (53 tests across help, link/unlink, doctor, status, install, uninstall, rollback, backup, json-write, jsonl-utils, and smoke tests)
+- Post-link smoke test (`verify_link_health`) runs automatically after `spectra link` and `spectra install`
+- Pre-install validation in `install.sh` (disk space, write permissions, network, python3 version, settings.json)
+- ShellCheck in local pre-commit hook for staged shell scripts
+- CI job for functional tests (`bats-tests` in lint workflow)
+- **Spectra CLI** (`bin/spectra`) — install, update, rollback, uninstall, link, unlink, status, doctor, backup commands
+- `bin/json-write.sh` — scoped JSON writer replacing broad `python3 -c *` permission
+- `.github/workflows/release.yml` — automated release with SHA-256 checksums
+- Curl-based installer (`install.sh` rewrite) with `main()` wrapper and checksum verification
+- Atomic swap protocol for safe skill updates with trap-based rollback
+- mkdir-based settings.json locking with stale lock detection
+- Compare-and-swap settings.json writes to prevent concurrent modification
+- Migration compatibility symlinks (`~/.claude/{skill}-sessions/` → `~/.spectra/sessions/{skill}/`)
+- CI lint rule for hardcoded `~/.claude/` session paths
 - **code-review** skill (v1.0) — multi-perspective code review with 6 core + 6 specialist personas
 - Reconnaissance phase with scout + research agents for codebase context and current best practices
 - Web Search Security model (Layer 4) in `shared/security.md` — provenance tagging, domain scoping, content isolation, query constraints, two-pass research

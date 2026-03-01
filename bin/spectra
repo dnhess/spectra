@@ -1,0 +1,1087 @@
+#!/bin/bash
+# spectra — Spectra CLI for managing multi-agent skills
+set -euo pipefail
+
+readonly SPECTRA_VERSION="0.2.0"
+readonly SPECTRA_HOME="$HOME/.spectra"
+readonly CLAUDE_HOME="$HOME/.claude"
+readonly SKILLS_DIR="$SPECTRA_HOME/skills"
+readonly SESSIONS_DIR="$SPECTRA_HOME/sessions"
+readonly BACKUPS_DIR="$SPECTRA_HOME/backups"
+readonly BIN_DIR="$SPECTRA_HOME/bin"
+readonly CLAUDE_SKILLS_DIR="$CLAUDE_HOME/skills"
+readonly VERSION_FILE="$SPECTRA_HOME/version"
+readonly MODE_FILE="$SPECTRA_HOME/mode"
+readonly LOCK_DIR="$SPECTRA_HOME/.settings-lock"
+readonly GITHUB_REPO="dnhess/spectra"
+
+# Known skills (update when adding new skills)
+readonly KNOWN_SKILLS=(shared deep-design decision-board code-review)
+
+# --- Logging ---
+
+log_info() { echo "  $*"; }
+log_success() { echo "  ✓ $*"; }
+log_warn() { echo "  ! $*" >&2; }
+log_error() { echo "  ✗ $*" >&2; }
+log_header() { echo ""; echo "=== $* ==="; echo ""; }
+
+# --- Prerequisite checks ---
+
+require_installed() {
+  [[ -d "$SPECTRA_HOME" ]] || { log_error "Spectra is not installed. Run: curl -fsSL <url> | bash"; exit 1; }
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || { log_error "Required command not found: $1"; exit 1; }
+}
+
+detect_checksum_cmd() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    echo "sha256sum"
+  elif command -v shasum >/dev/null 2>&1; then
+    echo "shasum -a 256"
+  else
+    log_error "No SHA-256 tool found. Install coreutils."
+    exit 1
+  fi
+}
+
+# --- GitHub API helpers ---
+
+fetch_latest_release() {
+  local api_url="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+  curl -fsSL "$api_url" 2>/dev/null || { log_error "Failed to fetch release info from GitHub"; exit 1; }
+}
+
+get_release_tag() {
+  local release_json="$1"
+  echo "$release_json" | python3 -c "import sys, json; print(json.load(sys.stdin)['tag_name'])"
+}
+
+get_release_asset_url() {
+  local release_json="$1"
+  local asset_name="$2"
+  echo "$release_json" | python3 -c "
+import sys, json
+release = json.load(sys.stdin)
+for asset in release.get('assets', []):
+    if asset['name'] == '$asset_name':
+        print(asset['browser_download_url'])
+        sys.exit(0)
+print('', end='')
+sys.exit(1)
+"
+}
+
+# --- Checksum verification ---
+
+verify_checksum() {
+  local tarball="$1"
+  local checksums_file="$2"
+  local checksum_cmd
+  checksum_cmd="$(detect_checksum_cmd)"
+
+  local expected actual tarball_name
+  tarball_name="$(basename "$tarball")"
+  expected="$(grep "$tarball_name" "$checksums_file" | awk '{print $1}')"
+  actual="$($checksum_cmd "$tarball" | awk '{print $1}')"
+
+  if [[ "$expected" != "$actual" ]]; then
+    log_error "Checksum mismatch!"
+    log_error "  Expected: $expected"
+    log_error "  Actual:   $actual"
+    exit 1
+  fi
+  log_success "Checksum verified"
+}
+
+# --- Atomic swap ---
+
+atomic_swap() {
+  local target="$1"
+  local staging="$2"
+  local backup="$3"
+
+  # shellcheck disable=SC2064
+  trap "if [ -d '$backup' ] && [ ! -d '$target' ]; then mv '$backup' '$target'; fi; rm -rf '$staging'" EXIT INT TERM
+
+  if [[ -d "$target" ]]; then
+    mv "$target" "$backup"
+  fi
+  mv "$staging" "$target"
+
+  # Reset trap after success
+  trap - EXIT INT TERM
+}
+
+# --- Settings.json locking ---
+
+acquire_lock() {
+  local max_wait=5
+  local elapsed=0
+
+  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+    # Check for stale lock
+    if [[ -f "$LOCK_DIR/pid" ]]; then
+      local lock_pid
+      lock_pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || echo "")"
+      if [[ -n "$lock_pid" ]] && ! kill -0 "$lock_pid" 2>/dev/null; then
+        log_warn "Removing stale lock (PID $lock_pid is dead)"
+        rm -rf "$LOCK_DIR"
+        continue
+      fi
+    fi
+
+    # Check lock age (stale if > 5 minutes)
+    if [[ -d "$LOCK_DIR" ]]; then
+      local lock_age
+      lock_age=$(( $(date +%s) - $(stat -f %m "$LOCK_DIR" 2>/dev/null || stat -c %Y "$LOCK_DIR" 2>/dev/null || echo "0") ))
+      if [[ "$lock_age" -gt 300 ]]; then
+        log_warn "Removing stale lock (older than 5 minutes)"
+        rm -rf "$LOCK_DIR"
+        continue
+      fi
+    fi
+
+    sleep 0.2
+    elapsed=$((elapsed + 1))
+    if [[ "$elapsed" -ge $((max_wait * 5)) ]]; then
+      log_error "Could not acquire settings lock after ${max_wait}s"
+      log_error "Another spectra operation may be in progress."
+      log_error "If not, remove: $LOCK_DIR"
+      exit 1
+    fi
+  done
+
+  echo $$ > "$LOCK_DIR/pid"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$LOCK_DIR'" EXIT INT TERM
+}
+
+release_lock() {
+  rm -rf "$LOCK_DIR"
+  trap - EXIT INT TERM
+}
+
+# --- Settings.json merge ---
+
+settings_backup() {
+  local settings_file="$CLAUDE_HOME/settings.json"
+  if [[ -f "$settings_file" ]]; then
+    mkdir -p "$BACKUPS_DIR"
+    local timestamp
+    timestamp="$(date +%Y%m%d-%H%M%S)"
+    cp "$settings_file" "$BACKUPS_DIR/settings.json.$timestamp"
+    log_success "Backed up settings.json ($timestamp)"
+  fi
+}
+
+get_spectra_permissions() {
+  cat <<'PERMS'
+["Bash(mkdir -p ~/.spectra/sessions/*)","Bash(bash ~/.spectra/bin/json-write.sh *)","Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)","Write(~/.spectra/sessions/**)","Read(~/.spectra/sessions/**)","Glob(~/.spectra/sessions/**)","Write(~/.spectra/.active-*)"]
+PERMS
+}
+
+settings_merge_permissions() {
+  local settings_file="$CLAUDE_HOME/settings.json"
+  local action="${1:-add}"  # "add" or "remove"
+
+  # Record mtime before read (compare-and-swap)
+  local mtime_before=""
+  if [[ -f "$settings_file" ]]; then
+    mtime_before="$(stat -f %m "$settings_file" 2>/dev/null || stat -c %Y "$settings_file" 2>/dev/null)"
+  fi
+
+  # Read current settings
+  local current="{}"
+  if [[ -f "$settings_file" ]]; then
+    current="$(cat "$settings_file")"
+  fi
+
+  local spectra_perms
+  spectra_perms="$(get_spectra_permissions)"
+
+  # Merge or remove permissions
+  local updated
+  updated="$(echo "$current" | python3 -c "
+import sys, json
+
+settings = json.load(sys.stdin)
+spectra_perms = json.loads('$spectra_perms')
+action = '$action'
+
+perms = settings.get('permissions', {})
+allow = perms.get('allow', [])
+
+if action == 'add':
+    for p in spectra_perms:
+        if p not in allow:
+            allow.append(p)
+elif action == 'remove':
+    allow = [p for p in allow if p not in spectra_perms]
+
+if allow:
+    perms['allow'] = allow
+    settings['permissions'] = perms
+elif 'permissions' in settings and 'allow' in settings['permissions']:
+    settings['permissions']['allow'] = allow
+
+json.dump(settings, sys.stdout, indent=2)
+print()
+")" || { log_error "Failed to merge permissions"; return 1; }
+
+  # Validate JSON
+  echo "$updated" | python3 -c "import sys, json; json.load(sys.stdin)" \
+    || { log_error "Merged settings.json is invalid JSON"; return 1; }
+
+  # Compare-and-swap: check mtime hasn't changed
+  if [[ -f "$settings_file" ]]; then
+    local mtime_after
+    mtime_after="$(stat -f %m "$settings_file" 2>/dev/null || stat -c %Y "$settings_file" 2>/dev/null)"
+    if [[ "$mtime_before" != "$mtime_after" ]]; then
+      log_error "settings.json was modified by another process during merge"
+      log_error "Re-run the command to retry"
+      return 1
+    fi
+  fi
+
+  # Atomic write
+  local tmp_file="$settings_file.tmp.$$"
+  echo "$updated" > "$tmp_file"
+  mv "$tmp_file" "$settings_file"
+}
+
+# --- Symlink helpers ---
+
+create_skill_symlinks() {
+  local source_base="$1"  # e.g., ~/.spectra/skills or /path/to/repo
+  mkdir -p "$CLAUDE_SKILLS_DIR"
+  for skill in "${KNOWN_SKILLS[@]}"; do
+    if [[ -d "$source_base/$skill" ]]; then
+      local target="$CLAUDE_SKILLS_DIR/$skill"
+      # Remove existing directory (non-symlink) so ln -sfn can create the symlink
+      if [[ -d "$target" && ! -L "$target" ]]; then
+        rm -rf "$target"
+      fi
+      ln -sfn "$source_base/$skill" "$target"
+      log_success "Linked $skill"
+    fi
+  done
+}
+
+remove_spectra_symlinks() {
+  for skill in "${KNOWN_SKILLS[@]}"; do
+    local link="$CLAUDE_SKILLS_DIR/$skill"
+    if [[ -L "$link" ]]; then
+      local target
+      target="$(readlink "$link")"
+      if [[ "$target" == "$SPECTRA_HOME"/* ]] || [[ "$target" == *"/spectra/"* ]]; then
+        rm "$link"
+        log_success "Removed symlink: $skill"
+      fi
+    fi
+  done
+}
+
+# --- Post-link health check ---
+
+verify_link_health() {
+  local source_base="${1:-$SKILLS_DIR}"
+  local issues=0
+
+  # Check each known skill has a valid symlink
+  for skill in "${KNOWN_SKILLS[@]}"; do
+    local link="$CLAUDE_SKILLS_DIR/$skill"
+    if [[ ! -L "$link" ]]; then
+      log_warn "Smoke test: $skill symlink missing"
+      issues=$((issues + 1))
+    elif [[ ! -d "$(readlink "$link")" ]]; then
+      log_warn "Smoke test: $skill symlink broken"
+      issues=$((issues + 1))
+    fi
+  done
+
+  # Check shared/orchestration.md exists
+  local orch_path="$CLAUDE_SKILLS_DIR/shared/orchestration.md"
+  if [[ ! -f "$orch_path" ]]; then
+    log_warn "Smoke test: shared/orchestration.md missing"
+    issues=$((issues + 1))
+  fi
+
+  # Check each non-shared skill has SKILL.md and personas/
+  for skill in "${KNOWN_SKILLS[@]}"; do
+    [[ "$skill" == "shared" ]] && continue
+    local skill_dir="$CLAUDE_SKILLS_DIR/$skill"
+    if [[ -d "$skill_dir" ]]; then
+      if [[ ! -f "$skill_dir/SKILL.md" ]]; then
+        log_warn "Smoke test: $skill/SKILL.md missing"
+        issues=$((issues + 1))
+      fi
+      if [[ ! -d "$skill_dir/personas" ]]; then
+        log_warn "Smoke test: $skill/personas/ missing"
+        issues=$((issues + 1))
+      fi
+    fi
+  done
+
+  # Check session directories are writable
+  for skill in deep-design decision-board code-review; do
+    local dir="$SESSIONS_DIR/$skill"
+    if [[ -d "$dir" ]] && [[ ! -w "$dir" ]]; then
+      log_warn "Smoke test: $dir not writable"
+      issues=$((issues + 1))
+    fi
+  done
+
+  # Check json-write.sh is executable
+  if [[ ! -x "$BIN_DIR/json-write.sh" ]]; then
+    log_warn "Smoke test: json-write.sh not executable"
+    issues=$((issues + 1))
+  fi
+
+  if [[ "$issues" -eq 0 ]]; then
+    log_success "Health check passed"
+    return 0
+  else
+    log_warn "Health check: $issues issue(s) found"
+    return 1
+  fi
+}
+
+# --- Commands ---
+
+cmd_install() {
+  log_header "Spectra Install"
+
+  # Pre-flight
+  if [[ -d "$SPECTRA_HOME" ]]; then
+    log_error "Spectra is already installed at $SPECTRA_HOME"
+    log_info "Use 'spectra update' to get the latest version"
+    exit 1
+  fi
+
+  require_command curl
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_warn "python3 not found — skills require it at runtime"
+  fi
+  detect_checksum_cmd >/dev/null
+
+  # Download
+  log_info "Fetching latest release..."
+  local release_json
+  release_json="$(fetch_latest_release)"
+  local tag
+  tag="$(get_release_tag "$release_json")"
+  local version="${tag#v}"
+  log_info "Latest version: $version"
+
+  local tarball_name="spectra-${tag}.tar.gz"
+  local tarball_url checksums_url
+  tarball_url="$(get_release_asset_url "$release_json" "$tarball_name")"
+  checksums_url="$(get_release_asset_url "$release_json" "checksums.txt")"
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$tmp_dir'" EXIT
+
+  curl -fsSL -o "$tmp_dir/$tarball_name" "$tarball_url"
+  curl -fsSL -o "$tmp_dir/checksums.txt" "$checksums_url"
+
+  # Verify checksum
+  verify_checksum "$tmp_dir/$tarball_name" "$tmp_dir/checksums.txt"
+
+  # Extract and place
+  mkdir -p "$SPECTRA_HOME"/{skills,sessions,backups,bin}
+  tar -xzf "$tmp_dir/$tarball_name" -C "$SPECTRA_HOME/skills/"
+  log_success "Extracted skills to $SKILLS_DIR"
+
+  # Install CLI and json-write.sh from tarball bin/
+  if [[ -f "$SPECTRA_HOME/skills/bin/spectra" ]]; then
+    cp "$SPECTRA_HOME/skills/bin/spectra" "$BIN_DIR/spectra"
+    chmod +x "$BIN_DIR/spectra"
+  fi
+  if [[ -f "$SPECTRA_HOME/skills/bin/json-write.sh" ]]; then
+    cp "$SPECTRA_HOME/skills/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+    chmod +x "$BIN_DIR/json-write.sh"
+  fi
+  # Remove bin/ from skills/ (it's a CLI artifact, not a skill)
+  rm -rf "$SPECTRA_HOME/skills/bin"
+
+  echo "$version" > "$VERSION_FILE"
+  echo "release" > "$MODE_FILE"
+  log_success "Installed version $version"
+
+  # Symlinks
+  create_skill_symlinks "$SKILLS_DIR"
+
+  # Create session directories
+  for skill in deep-design decision-board code-review; do
+    mkdir -p "$SESSIONS_DIR/$skill"
+  done
+
+  # Migration compatibility symlinks
+  for skill in deep-design decision-board code-review; do
+    local old_path="$CLAUDE_HOME/${skill}-sessions"
+    if [[ ! -e "$old_path" ]]; then
+      ln -sfn "$SESSIONS_DIR/$skill" "$old_path"
+      log_info "Created compat symlink: ${skill}-sessions"
+    fi
+  done
+
+  # Configure permissions
+  settings_backup
+  acquire_lock
+  settings_merge_permissions "add" || { release_lock; exit 1; }
+  release_lock
+  log_success "Permissions configured in settings.json"
+
+  # Add to PATH
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$BIN_DIR/spectra" "$HOME/.local/bin/spectra"
+  if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    log_warn "\$HOME/.local/bin is not in your PATH"
+    log_info "Add to your shell profile:"
+    log_info "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+  fi
+
+  # Summary
+  log_header "Install Complete"
+  log_info "Version: $version"
+  log_info "Skills:  ${KNOWN_SKILLS[*]}"
+  log_info "Home:    $SPECTRA_HOME"
+
+  # Post-install smoke test
+  if [[ "${SPECTRA_NO_VERIFY:-}" != "1" ]]; then
+    verify_link_health || log_warn "Run 'spectra doctor' for details."
+  fi
+
+  rm -rf "$tmp_dir"
+  trap - EXIT
+}
+
+cmd_update() {
+  require_installed
+  log_header "Spectra Update"
+
+  local current_mode
+  current_mode="$(cat "$MODE_FILE" 2>/dev/null || echo "release")"
+  if [[ "$current_mode" == "dev" ]]; then
+    local repo_path
+    repo_path="$(cat "$SPECTRA_HOME/dev-repo" 2>/dev/null || echo "unknown")"
+    log_error "Spectra is in dev mode (linked to $repo_path)"
+    log_info "Run 'spectra unlink' first, or use 'git pull' in your repo"
+    exit 1
+  fi
+
+  local current_version
+  current_version="$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")"
+  log_info "Current version: $current_version"
+
+  log_info "Fetching latest release..."
+  local release_json
+  release_json="$(fetch_latest_release)"
+  local tag
+  tag="$(get_release_tag "$release_json")"
+  local version="${tag#v}"
+
+  if [[ "$current_version" == "$version" ]]; then
+    log_success "Already up to date ($version)"
+    exit 0
+  fi
+  log_info "New version available: $version"
+
+  # Download
+  local tarball_name="spectra-${tag}.tar.gz"
+  local tarball_url checksums_url
+  tarball_url="$(get_release_asset_url "$release_json" "$tarball_name")"
+  checksums_url="$(get_release_asset_url "$release_json" "checksums.txt")"
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$tmp_dir'" EXIT
+
+  curl -fsSL -o "$tmp_dir/$tarball_name" "$tarball_url"
+  curl -fsSL -o "$tmp_dir/checksums.txt" "$checksums_url"
+  verify_checksum "$tmp_dir/$tarball_name" "$tmp_dir/checksums.txt"
+
+  # Extract to staging
+  local staging_dir="$SPECTRA_HOME/skills-staging"
+  mkdir -p "$staging_dir"
+  tar -xzf "$tmp_dir/$tarball_name" -C "$staging_dir/"
+
+  # Update bin/ from staging
+  if [[ -f "$staging_dir/bin/spectra" ]]; then
+    cp "$staging_dir/bin/spectra" "$BIN_DIR/spectra"
+    chmod +x "$BIN_DIR/spectra"
+  fi
+  if [[ -f "$staging_dir/bin/json-write.sh" ]]; then
+    cp "$staging_dir/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+    chmod +x "$BIN_DIR/json-write.sh"
+  fi
+  rm -rf "${staging_dir:?}/bin"
+
+  # Atomic swap
+  atomic_swap "$SKILLS_DIR" "$staging_dir" "$SPECTRA_HOME/skills-prev"
+  log_success "Skills updated (previous version preserved for rollback)"
+
+  # Re-check symlinks
+  create_skill_symlinks "$SKILLS_DIR"
+
+  # Re-merge permissions
+  settings_backup
+  acquire_lock
+  settings_merge_permissions "add" || { release_lock; exit 1; }
+  release_lock
+
+  echo "$version" > "$VERSION_FILE"
+  log_header "Update Complete"
+  log_info "Updated: $current_version → $version"
+  log_info "Run 'spectra rollback' to revert if needed"
+
+  rm -rf "$tmp_dir"
+  trap - EXIT
+}
+
+cmd_rollback() {
+  require_installed
+  log_header "Spectra Rollback"
+
+  local prev_dir="$SPECTRA_HOME/skills-prev"
+  if [[ ! -d "$prev_dir" ]]; then
+    log_error "No previous version available for rollback"
+    exit 1
+  fi
+
+  # Swap current and previous
+  local failed_dir="$SPECTRA_HOME/skills-failed"
+  mv "$SKILLS_DIR" "$failed_dir"
+  mv "$prev_dir" "$SKILLS_DIR"
+  mv "$failed_dir" "$prev_dir"
+
+  # Refresh symlinks
+  create_skill_symlinks "$SKILLS_DIR"
+
+  # Read version from rolled-back skills (if version marker exists)
+  log_success "Rolled back successfully"
+  log_info "Run 'spectra rollback' again to swap back"
+}
+
+cmd_uninstall() {
+  require_installed
+  log_header "Spectra Uninstall"
+
+  # Backup and remove permissions
+  settings_backup
+  acquire_lock
+  settings_merge_permissions "remove" || log_warn "Failed to clean permissions"
+  release_lock
+
+  # Remove skill symlinks
+  remove_spectra_symlinks
+
+  # Remove compat symlinks
+  for skill in deep-design decision-board code-review; do
+    local compat="$CLAUDE_HOME/${skill}-sessions"
+    if [[ -L "$compat" ]]; then
+      local target
+      target="$(readlink "$compat")"
+      if [[ "$target" == "$SESSIONS_DIR"/* ]]; then
+        rm "$compat"
+        log_success "Removed compat symlink: ${skill}-sessions"
+      fi
+    fi
+  done
+
+  # Session data prompt
+  if [[ -d "$SESSIONS_DIR" ]] && [[ "$(ls -A "$SESSIONS_DIR" 2>/dev/null)" ]]; then
+    echo ""
+    read -rp "  Delete session data? (y/N) " delete_sessions
+    if [[ "$delete_sessions" == [yY] ]]; then
+      rm -rf "$SESSIONS_DIR"
+      log_success "Session data deleted"
+    else
+      local backup_loc="$HOME/.spectra-sessions-backup"
+      mv "$SESSIONS_DIR" "$backup_loc"
+      log_success "Session data preserved at $backup_loc"
+    fi
+  fi
+
+  # Remove PATH symlink
+  rm -f "$HOME/.local/bin/spectra"
+
+  # Remove spectra home
+  rm -rf "$SPECTRA_HOME"
+  log_header "Uninstall Complete"
+  log_info "Spectra has been removed"
+  log_info "Backups were preserved at ~/.spectra/backups/ (now removed)"
+}
+
+cmd_link() {
+  local repo_path="${1:-}"
+
+  if [[ -z "$repo_path" ]]; then
+    log_error "Usage: spectra link <path-to-spectra-repo>"
+    exit 1
+  fi
+
+  # Resolve to absolute path
+  repo_path="$(cd "$repo_path" 2>/dev/null && pwd)" \
+    || { log_error "Path does not exist: $1"; exit 1; }
+
+  # Verify it's a Spectra repo
+  if [[ ! -d "$repo_path/shared" ]] || [[ ! -f "$repo_path/install.sh" ]]; then
+    log_error "Not a Spectra repo: $repo_path"
+    log_info "Expected shared/ directory and install.sh"
+    exit 1
+  fi
+
+  # Bootstrap ~/.spectra if not fully set up (first-time dev setup)
+  if [[ ! -x "$BIN_DIR/spectra" ]]; then
+    log_info "Bootstrapping ~/.spectra for dev setup..."
+    mkdir -p "$SPECTRA_HOME"/{skills,sessions,backups,bin}
+    for skill in deep-design decision-board code-review; do
+      mkdir -p "$SESSIONS_DIR/$skill"
+    done
+    [[ -f "$VERSION_FILE" ]] || echo "$SPECTRA_VERSION" > "$VERSION_FILE"
+    # Copy CLI tools so they're available at ~/.spectra/bin/
+    cp "$repo_path/bin/spectra" "$BIN_DIR/spectra"
+    chmod +x "$BIN_DIR/spectra"
+    if [[ -f "$repo_path/bin/json-write.sh" ]]; then
+      cp "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+      chmod +x "$BIN_DIR/json-write.sh"
+    fi
+    # Add to PATH via ~/.local/bin
+    mkdir -p "$HOME/.local/bin"
+    ln -sfn "$BIN_DIR/spectra" "$HOME/.local/bin/spectra"
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+      log_warn "\$HOME/.local/bin is not in your PATH"
+      log_info "Add to your shell profile:"
+      log_info "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
+    log_success "Bootstrapped ~/.spectra"
+  fi
+
+  # Check if already linked
+  local current_mode
+  current_mode="$(cat "$MODE_FILE" 2>/dev/null || echo "release")"
+  if [[ "$current_mode" == "dev" ]]; then
+    local current_repo
+    current_repo="$(cat "$SPECTRA_HOME/dev-repo" 2>/dev/null || echo "")"
+    log_error "Already in dev mode (linked to $current_repo)"
+    log_info "Run 'spectra unlink' first"
+    exit 1
+  fi
+
+  log_header "Spectra Link"
+
+  # Save current symlink targets for unlink restoration
+  local manifest="$SPECTRA_HOME/dev-link-manifest.json"
+  python3 -c "
+import json, os
+targets = {}
+skills_dir = os.path.expanduser('~/.claude/skills')
+for skill in ['shared', 'deep-design', 'decision-board', 'code-review']:
+    link = os.path.join(skills_dir, skill)
+    if os.path.islink(link):
+        targets[skill] = os.readlink(link)
+json.dump(targets, open('$manifest', 'w'), indent=2)
+print()
+"
+  log_success "Saved current symlink targets"
+
+  # Create direct symlinks to repo
+  create_skill_symlinks "$repo_path"
+
+  # Configure permissions
+  settings_backup
+  acquire_lock
+  settings_merge_permissions "add" || { release_lock; log_warn "Failed to configure permissions"; }
+  release_lock
+  log_success "Permissions configured in settings.json"
+
+  echo "dev" > "$MODE_FILE"
+  echo "$repo_path" > "$SPECTRA_HOME/dev-repo"
+
+  log_header "Dev Mode Active"
+  log_info "Linked to: $repo_path"
+  log_info "Run 'spectra unlink' to revert to release mode"
+
+  # Post-link smoke test
+  if [[ "${SPECTRA_NO_VERIFY:-}" != "1" ]]; then
+    verify_link_health "$repo_path" || log_warn "Run 'spectra doctor' for details."
+  fi
+}
+
+cmd_unlink() {
+  require_installed
+  log_header "Spectra Unlink"
+
+  local current_mode
+  current_mode="$(cat "$MODE_FILE" 2>/dev/null || echo "release")"
+  if [[ "$current_mode" != "dev" ]]; then
+    log_error "Not in dev mode"
+    exit 1
+  fi
+
+  # Remove current symlinks
+  remove_spectra_symlinks
+
+  # Restore release symlinks
+  create_skill_symlinks "$SKILLS_DIR"
+
+  # If skills dir is empty (first install was dev mode), re-download
+  if [[ ! -d "$SKILLS_DIR/shared" ]]; then
+    log_info "No release skills found — downloading latest..."
+    local release_json
+    release_json="$(fetch_latest_release)"
+    local tag
+    tag="$(get_release_tag "$release_json")"
+    local tarball_name="spectra-${tag}.tar.gz"
+    local tarball_url checksums_url
+    tarball_url="$(get_release_asset_url "$release_json" "$tarball_name")"
+    checksums_url="$(get_release_asset_url "$release_json" "checksums.txt")"
+
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+    curl -fsSL -o "$tmp_dir/$tarball_name" "$tarball_url"
+    curl -fsSL -o "$tmp_dir/checksums.txt" "$checksums_url"
+    verify_checksum "$tmp_dir/$tarball_name" "$tmp_dir/checksums.txt"
+
+    mkdir -p "$SKILLS_DIR"
+    tar -xzf "$tmp_dir/$tarball_name" -C "$SKILLS_DIR/"
+    rm -rf "$tmp_dir"
+
+    create_skill_symlinks "$SKILLS_DIR"
+    echo "${tag#v}" > "$VERSION_FILE"
+  fi
+
+  echo "release" > "$MODE_FILE"
+  rm -f "$SPECTRA_HOME/dev-repo" "$SPECTRA_HOME/dev-link-manifest.json"
+
+  log_success "Reverted to release mode"
+}
+
+cmd_status() {
+  require_installed
+  log_header "Spectra Status"
+
+  local version
+  version="$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")"
+  local mode
+  mode="$(cat "$MODE_FILE" 2>/dev/null || echo "unknown")"
+
+  echo "  Version:  $version"
+  if [[ "$mode" == "dev" ]]; then
+    local repo
+    repo="$(cat "$SPECTRA_HOME/dev-repo" 2>/dev/null || echo "unknown")"
+    echo "  Mode:     dev (linked to $repo)"
+  else
+    echo "  Mode:     release"
+  fi
+
+  # Check for latest version
+  if local release_json; release_json="$(fetch_latest_release 2>/dev/null)"; then
+    local latest
+    latest="$(get_release_tag "$release_json" 2>/dev/null || echo "")"
+    latest="${latest#v}"
+    if [[ -n "$latest" ]] && [[ "$latest" != "$version" ]]; then
+      echo "  Latest:   $latest (update available)"
+    fi
+  fi
+
+  echo ""
+  echo "  Skills:"
+  for skill in "${KNOWN_SKILLS[@]}"; do
+    local link="$CLAUDE_SKILLS_DIR/$skill"
+    if [[ -L "$link" ]]; then
+      local target
+      target="$(readlink "$link")"
+      if [[ -d "$target" ]]; then
+        echo "    ✓ $skill → $target"
+      else
+        echo "    ✗ $skill → $target (BROKEN)"
+      fi
+    else
+      echo "    - $skill (not linked)"
+    fi
+  done
+
+  echo ""
+  echo "  Sessions:"
+  for skill in deep-design decision-board code-review; do
+    local dir="$SESSIONS_DIR/$skill"
+    if [[ -d "$dir" ]]; then
+      local size
+      size="$(du -sh "$dir" 2>/dev/null | awk '{print $1}')"
+      local count
+      count="$(find "$dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
+      echo "    $skill: $count sessions ($size)"
+    fi
+  done
+
+  # Rollback availability
+  if [[ -d "$SPECTRA_HOME/skills-prev" ]]; then
+    echo ""
+    echo "  Rollback: previous version available"
+  fi
+
+  # Permissions check
+  echo ""
+  local settings_file="$CLAUDE_HOME/settings.json"
+  if [[ -f "$settings_file" ]] && grep -q "json-write.sh" "$settings_file" 2>/dev/null; then
+    echo "  Permissions: ✓ configured"
+  else
+    echo "  Permissions: ✗ not configured (run 'spectra doctor')"
+  fi
+}
+
+cmd_doctor() {
+  require_installed
+  log_header "Spectra Doctor"
+  local issues=0
+
+  # Dependencies
+  for dep in bash curl python3; do
+    if command -v "$dep" >/dev/null 2>&1; then
+      log_success "$dep found"
+    else
+      log_warn "$dep not found"
+      issues=$((issues + 1))
+    fi
+  done
+
+  # Checksum tool
+  if detect_checksum_cmd >/dev/null 2>&1; then
+    log_success "SHA-256 tool found"
+  else
+    log_warn "No SHA-256 tool (sha256sum or shasum) found"
+    issues=$((issues + 1))
+  fi
+
+  local mode
+  mode="$(cat "$MODE_FILE" 2>/dev/null || echo "release")"
+
+  # Symlinks
+  for skill in "${KNOWN_SKILLS[@]}"; do
+    local link="$CLAUDE_SKILLS_DIR/$skill"
+    if [[ -L "$link" ]]; then
+      local target
+      target="$(readlink "$link")"
+      if [[ -d "$target" ]]; then
+        # Mode-aware verification
+        if [[ "$mode" == "release" ]] && [[ "$target" != "$SKILLS_DIR/$skill" ]]; then
+          log_warn "$skill: points to $target (expected $SKILLS_DIR/$skill)"
+          issues=$((issues + 1))
+        else
+          log_success "$skill symlink OK"
+        fi
+      else
+        log_warn "$skill: broken symlink → $target"
+        issues=$((issues + 1))
+      fi
+    else
+      log_warn "$skill: not linked"
+      issues=$((issues + 1))
+    fi
+  done
+
+  # Permissions
+  local settings_file="$CLAUDE_HOME/settings.json"
+  if [[ -f "$settings_file" ]]; then
+    local spectra_perms
+    spectra_perms="$(get_spectra_permissions)"
+    local missing_count
+    missing_count="$(python3 -c "
+import json
+settings = json.load(open('$settings_file'))
+spectra = json.loads('$spectra_perms')
+allow = settings.get('permissions', {}).get('allow', [])
+missing = [p for p in spectra if p not in allow]
+print(len(missing))
+" 2>/dev/null || echo "unknown")"
+    if [[ "$missing_count" == "0" ]]; then
+      log_success "All permissions configured"
+    else
+      log_warn "$missing_count Spectra permission(s) missing from settings.json"
+      log_info "  Fix: spectra update (re-merges permissions)"
+      issues=$((issues + 1))
+    fi
+  else
+    log_warn "settings.json not found"
+    issues=$((issues + 1))
+  fi
+
+  # Session directories
+  for skill in deep-design decision-board code-review; do
+    local dir="$SESSIONS_DIR/$skill"
+    if [[ -d "$dir" ]] && [[ -w "$dir" ]]; then
+      log_success "$skill session directory OK"
+    elif [[ -d "$dir" ]]; then
+      log_warn "$skill session directory not writable"
+      issues=$((issues + 1))
+    else
+      log_warn "$skill session directory missing"
+      log_info "  Fix: mkdir -p $dir"
+      issues=$((issues + 1))
+    fi
+  done
+
+  # Compatibility symlinks
+  for skill in deep-design decision-board code-review; do
+    local compat="$CLAUDE_HOME/${skill}-sessions"
+    if [[ -L "$compat" ]]; then
+      # Check if any active sessions exist
+      local active_sentinel="$SPECTRA_HOME/.active-${skill}-session"
+      if [[ -f "$active_sentinel" ]]; then
+        log_info "Compat symlink ${skill}-sessions exists (active session detected — keeping)"
+      else
+        log_info "Compat symlink ${skill}-sessions can be removed"
+        log_info "  Fix: rm $compat"
+      fi
+    fi
+  done
+
+  # Dev mode checks
+  if [[ "$mode" == "dev" ]]; then
+    local repo
+    repo="$(cat "$SPECTRA_HOME/dev-repo" 2>/dev/null || echo "")"
+    if [[ -n "$repo" ]] && [[ -d "$repo" ]]; then
+      log_success "Dev repo exists: $repo"
+    else
+      log_warn "Dev repo missing: $repo"
+      log_info "  Fix: spectra unlink"
+      issues=$((issues + 1))
+    fi
+  fi
+
+  echo ""
+  if [[ "$issues" -eq 0 ]]; then
+    log_success "No issues found"
+  else
+    log_warn "$issues issue(s) found"
+  fi
+}
+
+cmd_backup() {
+  require_installed
+  local subcmd="${1:-}"
+  shift || true
+
+  case "$subcmd" in
+    list)
+      log_header "Settings Backups"
+      if [[ -d "$BACKUPS_DIR" ]]; then
+        local count=0
+        while IFS= read -r f; do
+          local ts
+          ts="$(basename "$f" | sed 's/settings\.json\.//')"
+          echo "  $ts  $(du -h "$f" | awk '{print $1}')"
+          count=$((count + 1))
+        done < <(ls -t "$BACKUPS_DIR"/settings.json.* 2>/dev/null)
+        if [[ "$count" -eq 0 ]]; then
+          log_info "No backups found"
+        fi
+      else
+        log_info "No backups directory"
+      fi
+      ;;
+
+    restore)
+      log_header "Restore Settings"
+      local timestamp="${1:-}"
+      local backup_file
+
+      if [[ -n "$timestamp" ]]; then
+        backup_file="$BACKUPS_DIR/settings.json.$timestamp"
+      else
+        backup_file="$(find "$BACKUPS_DIR" -maxdepth 1 -name 'settings.json.*' -print0 2>/dev/null \
+          | xargs -0 ls -t 2>/dev/null | head -1)"
+      fi
+
+      if [[ -z "$backup_file" ]] || [[ ! -f "$backup_file" ]]; then
+        log_error "Backup not found${timestamp:+: $timestamp}"
+        exit 1
+      fi
+
+      # Validate
+      python3 -c "import json; json.load(open('$backup_file'))" 2>/dev/null \
+        || { log_error "Backup is not valid JSON"; exit 1; }
+
+      # Backup current before restoring
+      settings_backup
+
+      acquire_lock
+      cp "$backup_file" "$CLAUDE_HOME/settings.json"
+      release_lock
+
+      log_success "Restored from: $(basename "$backup_file")"
+      ;;
+
+    *)
+      log_error "Usage: spectra backup <list|restore> [timestamp]"
+      exit 1
+      ;;
+  esac
+}
+
+cmd_help() {
+  cat <<EOF
+spectra — Spectra CLI for managing multi-agent skills
+
+Usage: spectra <command> [options]
+
+Commands:
+  install           Install Spectra from latest release
+  update            Update to latest release
+  rollback          Roll back to previous version
+  uninstall         Remove Spectra
+  link <path>       Switch to dev mode (symlink to repo)
+  unlink            Revert to release mode
+  status            Show installation status
+  doctor            Diagnose and suggest fixes
+  backup list       List settings.json backups
+  backup restore    Restore a settings.json backup
+  version           Show version
+  help              Show this help
+
+EOF
+}
+
+cmd_version() {
+  if [[ -f "$VERSION_FILE" ]]; then
+    echo "spectra $(cat "$VERSION_FILE")"
+  else
+    echo "spectra $SPECTRA_VERSION (not installed)"
+  fi
+}
+
+# --- Main dispatch ---
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+
+  case "$cmd" in
+    install)          cmd_install "$@" ;;
+    update)           cmd_update "$@" ;;
+    rollback)         cmd_rollback "$@" ;;
+    uninstall)        cmd_uninstall "$@" ;;
+    link)             cmd_link "$@" ;;
+    unlink)           cmd_unlink "$@" ;;
+    status)           cmd_status "$@" ;;
+    doctor)           cmd_doctor "$@" ;;
+    backup)           cmd_backup "$@" ;;
+    help|--help|-h)   cmd_help ;;
+    version|--version|-v) cmd_version ;;
+    *)
+      log_error "Unknown command: $cmd"
+      cmd_help
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

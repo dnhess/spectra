@@ -12,8 +12,10 @@ Thanks for your interest in contributing. This guide covers how to add skills, m
    cd spectra
    npm install       # installs commitlint, markdownlint, husky
    npm run prepare   # activates git hooks
-   ./install.sh      # symlinks skills into ~/.claude/skills/
+   spectra link .    # symlinks skills into ~/.claude/skills/ (dev mode)
    ```
+
+   If Spectra isn't installed yet, run `./install.sh` first.
 
 3. Create a branch for your changes: `git checkout -b feat/my-change`
 
@@ -32,7 +34,7 @@ Each skill lives in its own directory and must contain:
 - Agent output files are always JSON, serialized with `python3 -c 'import json; ...'` — never string concatenation
 - The moderator (main Claude instance) is the sole JSONL event log writer
 - Agents communicate by writing files to session subdirectories, not via SendMessage
-- Session directories live under `~/.claude/{skill-name}-sessions/`
+- Session directories live under `~/.spectra/sessions/{skill-name}/`
 
 ## Commit Messages
 
@@ -50,7 +52,7 @@ chore: update .gitignore
 1. Ensure your skill files follow the established format
 2. Test with Claude Code if modifying orchestration logic
 3. Update `CHANGELOG.md` under `[Unreleased]` if adding or changing skills
-4. Update `install.sh` if adding a new skill directory
+4. Update `KNOWN_SKILLS` in `bin/spectra` if adding a new skill directory
 5. Submit your PR with a clear description of what changed and why
 
 ## Adding a New Skill
@@ -64,7 +66,7 @@ chore: update .gitignore
    - Define handoff content mapping for your domain
    - Define which manifest field identifies repeat sessions
    - Add checkpoint timing appropriate for your session phases
-6. Add a symlink line to `install.sh`
+6. Add the skill name to `KNOWN_SKILLS` in `bin/spectra`
 7. Update `README.md` to list the new skill
 
 ## Code of Conduct

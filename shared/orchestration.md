@@ -251,7 +251,7 @@ Each SKILL.md includes this instruction near the top of the file (survives compa
 ```
 If your context seems incomplete (you don't remember the session setup, agents,
 or current phase), you may have experienced context compaction.
-1. Check for `~/.claude/.active-{skill}-session` to find the session directory
+1. Check for `~/.spectra/.active-{skill}-session` to find the session directory
 2. Read `session-state.md` from that directory
 3. Validate the checkpoint (verify section headers and session ID match)
 4. If checkpoint is invalid, replay the JSONL event log to reconstruct state
@@ -273,14 +273,14 @@ When reading `session-state.md` after compaction, validate the checkpoint before
 
 To make session directories discoverable after context compaction, the moderator writes a sentinel file at session start:
 
-- **Path**: `~/.claude/.active-{skill}-session` (e.g., `~/.claude/.active-deep-design-session`)
+- **Path**: `~/.spectra/.active-{skill}-session` (e.g., `~/.spectra/.active-deep-design-session`)
 - **Format**: JSON
 - **Written**: At session start (Phase 2), after creating the session directory
 - **Deleted**: At session end (Phase 6), after writing the manifest entry
 
 ```json
 {
-  "session_dir": "~/.claude/{skill}-sessions/{topic}-{timestamp}/",
+  "session_dir": "~/.spectra/sessions/{skill}/{topic}-{timestamp}/",
   "session_id": "{skill}-{topic}-{timestamp}",
   "skill": "{skill-name}",
   "started_at": "ISO-8601"
@@ -368,7 +368,7 @@ After writing the handoff file, the moderator:
 
 1. Writes a `handoff_written` event to the JSONL log. See `event-schemas-base.md` for the schema.
 2. Sets `has_handoff: true` in the manifest entry for this session.
-3. Sets `session_dirname` in the manifest entry to the leaf directory name only (e.g., `my-topic-20260301T120000`). The full path is resolved at read time by joining with `~/.claude/{skill}-sessions/`. Never store absolute paths.
+3. Sets `session_dirname` in the manifest entry to the leaf directory name only (e.g., `my-topic-20260301T120000`). The full path is resolved at read time by joining with `~/.spectra/sessions/{skill}/`. Never store absolute paths.
 
 ### Error Handling
 
@@ -392,7 +392,7 @@ At session start, the moderator queries the manifest for prior sessions on the s
 2. Query manifest: `bash ~/.claude/skills/shared/tools/jsonl-utils.sh query-project {manifest_path} {project}`
 3. Filter results to entries where `has_handoff` is `true` AND `session_dirname` is not null
 4. Sort by timestamp descending, take the most recent entry
-5. Resolve full path: `~/.claude/{skill}-sessions/{session_dirname}`
+5. Resolve full path: `~/.spectra/sessions/{skill}/{session_dirname}`
 6. Read `{resolved_path}/handoff.md`
 7. Apply the degradation ladder (see `~/.claude/skills/shared/security.md`) — if any step fails, continue without prior context
 
@@ -448,7 +448,7 @@ Skills using the persistence system integrate these steps at standard phase boun
 
 ### Session Start (Phase 0-2)
 
-1. Write `.active-{skill}-session` sentinel to `~/.claude/` (see State Checkpoints > Active Session Sentinel)
+1. Write `.active-{skill}-session` sentinel to `~/.spectra/` (see State Checkpoints > Active Session Sentinel)
 2. Query manifest for prior sessions on this project (see Prior Session Context)
 3. Load most recent handoff (apply degradation ladder from `security.md`)
 4. Build per-project task summary (ephemeral, capped at 5 sessions)

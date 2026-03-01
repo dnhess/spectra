@@ -189,7 +189,7 @@ Written by the parent skill's moderator after the child skill finishes. Pairs wi
   "timestamp": "ISO-8601",
   "composition_id": "comp-{uuid}",
   "child_session_id": "decision-board-mfa-scope-20260228T170100",
-  "child_session_dir": "~/.claude/decision-board-sessions/mfa-scope-20260228T170100/",
+  "child_session_dir": "~/.spectra/sessions/decision-board/mfa-scope-20260228T170100/",
   "child_quality": "Full",
   "outcome_summary": "Recommended: MFA for admin roles now, all users in v2. 85% consensus.",
   "parent_event_id": "uuid-of-composition_invoked"
@@ -283,7 +283,7 @@ Every manifest entry MUST include these common fields. Domain-specific fields ar
 | `duration_seconds` | Integer or null | Wall-clock duration of the session |
 | `feedback_rating` | String or null | Post-session user rating. Nullable (populated after user provides feedback) |
 | `has_handoff` | Boolean | Whether `handoff.md` was written for this session. Default `false` for pre-existing entries missing this field |
-| `session_dirname` | String or null | Leaf directory name of the session directory. Resolved at read time via `~/.claude/{skill}-sessions/{session_dirname}`. `null` for pre-existing entries |
+| `session_dirname` | String or null | Leaf directory name of the session directory. Resolved at read time via `~/.spectra/sessions/{skill}/{session_dirname}`. `null` for pre-existing entries |
 
 ## JSONL Write Semantics
 

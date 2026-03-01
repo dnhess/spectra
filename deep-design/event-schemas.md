@@ -225,7 +225,7 @@ Where `n` is the number of agents in `session_start.agents`.
 
 ## Cross-Session Manifest Schema
 
-Each entry in `~/.claude/deep-design-sessions/manifest.jsonl` includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus these domain-specific fields:
+Each entry in `~/.spectra/sessions/deep-design/manifest.jsonl` includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus these domain-specific fields:
 
 ```json
 {

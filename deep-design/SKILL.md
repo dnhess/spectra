@@ -17,7 +17,7 @@ You (the main Claude instance) act as the **moderator** throughout. You drive ev
 
 If your context seems incomplete (you don't remember the session setup, agents, or current phase), you may have experienced context compaction.
 
-1. Check for `~/.claude/.active-deep-design-session` to find the session directory
+1. Check for `~/.spectra/.active-deep-design-session` to find the session directory
 2. Read `session-state.md` from that directory
 3. Validate the checkpoint (verify section headers and session ID match)
 4. If checkpoint is invalid, replay `review-events.jsonl` to reconstruct state
@@ -317,7 +317,7 @@ Include a timestamp to ensure uniqueness across sessions.
 Create a namespaced session directory with subdirectories for agent output:
 
 ```
-~/.claude/deep-design-sessions/{topic}-{timestamp}/
+~/.spectra/sessions/deep-design/{topic}-{timestamp}/
   session.lock           # Lock file with TTL
   review-events.jsonl    # JSONL event log (moderator-only writer)
   synthesis-brief.json   # Structured synthesis brief (produced by moderator)
@@ -907,11 +907,11 @@ Team teardown (TeamDelete) already happened in Phase 5 step 4. This phase handle
 3. Remove the `session.lock` file
 4. **Generate handoff**: Write `handoff.md` per Persistence Protocol (`~/.claude/skills/shared/orchestration.md` > Session Handoff). Content mapping: Key Findings from critical/major observations in `synthesis-brief.json`, Decisions Made from topic resolutions, Unresolved from deferred topics. Log `handoff_written` event.
 5. Write an entry to the cross-session manifest (see below). Set `has_handoff: true` and `session_dirname` to the leaf directory name.
-6. **Delete sentinel**: Remove `~/.claude/.active-deep-design-session`.
+6. **Delete sentinel**: Remove `~/.spectra/.active-deep-design-session`.
 
 ### Cross-Session Manifest
 
-Append one entry per session to `~/.claude/deep-design-sessions/manifest.jsonl`. Schema is defined in `~/.claude/skills/deep-design/event-schemas.md`. Include `compositions_invoked` and `composition_ids` fields.
+Append one entry per session to `~/.spectra/sessions/deep-design/manifest.jsonl`. Schema is defined in `~/.claude/skills/deep-design/event-schemas.md`. Include `compositions_invoked` and `composition_ids` fields.
 
 This enables historical tracking and informed tier suggestions at the confirmation gate.
 
@@ -1095,7 +1095,7 @@ Approve this specialist? [Y/n]
   tools/
     jsonl-utils.sh            # JSONL query utility
 
-~/.claude/deep-design-sessions/
+~/.spectra/sessions/deep-design/
   manifest.jsonl              # Cross-session analytics manifest
 ```
 

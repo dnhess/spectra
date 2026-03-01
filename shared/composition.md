@@ -22,7 +22,7 @@ The parent writes `composition-request.json` to its session directory before inv
   "parent": {
     "skill": "deep-design",
     "session_id": "deep-design-{topic}-{timestamp}",
-    "session_dir": "~/.claude/deep-design-sessions/{topic}-{timestamp}/",
+    "session_dir": "~/.spectra/sessions/deep-design/{topic}-{timestamp}/",
     "current_phase": "discussion",
     "trigger_reason": "deadlock on T002 — MFA scope"
   },
@@ -192,7 +192,7 @@ Written by the parent after the child finishes (Step 6).
   "timestamp": "ISO-8601",
   "composition_id": "comp-{uuid}",
   "child_session_id": "decision-board-mfa-scope-20260228T170100",
-  "child_session_dir": "~/.claude/decision-board-sessions/mfa-scope-20260228T170100/",
+  "child_session_dir": "~/.spectra/sessions/decision-board/mfa-scope-20260228T170100/",
   "child_quality": "Full",
   "outcome_summary": "Recommended: MFA for admin roles now, all users in v2. 85% consensus.",
   "parent_event_id": "uuid-of-composition_invoked"
