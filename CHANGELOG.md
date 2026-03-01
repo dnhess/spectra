@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Orchestration test suite covering event log integrity, session lifecycle, persona validation, security audit, and manifest operations (102 new tests)
+- Python schema validators for event validation (`test/helpers/validate_event.py`) and content sanitization testing (`test/helpers/check_sanitization.py`)
+- Orchestration test helpers in `common-setup.bash` for session directories, events, sentinels, locks, checkpoints, handoffs, and manifest entries
+
 ## [0.2.0] - 2026-03-01
 
 ### Changed
