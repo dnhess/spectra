@@ -545,7 +545,6 @@ cmd_uninstall() {
 }
 
 cmd_link() {
-  require_installed
   local repo_path="${1:-}"
 
   if [[ -z "$repo_path" ]]; then
@@ -562,6 +561,32 @@ cmd_link() {
     log_error "Not a Spectra repo: $repo_path"
     log_info "Expected shared/ directory and install.sh"
     exit 1
+  fi
+
+  # Bootstrap ~/.spectra if not installed (first-time dev setup)
+  if [[ ! -d "$SPECTRA_HOME" ]]; then
+    log_info "Bootstrapping ~/.spectra for dev setup..."
+    mkdir -p "$SPECTRA_HOME"/{skills,sessions,backups,bin}
+    for skill in deep-design decision-board code-review; do
+      mkdir -p "$SESSIONS_DIR/$skill"
+    done
+    echo "$SPECTRA_VERSION" > "$VERSION_FILE"
+    # Copy CLI tools so they're available at ~/.spectra/bin/
+    cp "$repo_path/bin/spectra" "$BIN_DIR/spectra"
+    chmod +x "$BIN_DIR/spectra"
+    if [[ -f "$repo_path/bin/json-write.sh" ]]; then
+      cp "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+      chmod +x "$BIN_DIR/json-write.sh"
+    fi
+    # Add to PATH
+    mkdir -p "$HOME/.local/bin"
+    ln -sfn "$BIN_DIR/spectra" "$HOME/.local/bin/spectra"
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+      log_warn "\$HOME/.local/bin is not in your PATH"
+      log_info "Add to your shell profile:"
+      log_info "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
+    log_success "Bootstrapped ~/.spectra"
   fi
 
   # Check if already linked
@@ -594,6 +619,13 @@ print()
 
   # Create direct symlinks to repo
   create_skill_symlinks "$repo_path"
+
+  # Configure permissions
+  settings_backup
+  acquire_lock
+  settings_merge_permissions "add" || { release_lock; log_warn "Failed to configure permissions"; }
+  release_lock
+  log_success "Permissions configured in settings.json"
 
   echo "dev" > "$MODE_FILE"
   echo "$repo_path" > "$SPECTRA_HOME/dev-repo"
