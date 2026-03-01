@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bats-based functional test suite for CLI commands (53 tests across help, link/unlink, doctor, status, install, uninstall, rollback, backup, json-write, jsonl-utils, and smoke tests)
+- Post-link smoke test (`verify_link_health`) runs automatically after `spectra link` and `spectra install`
+- Pre-install validation in `install.sh` (disk space, write permissions, network, python3 version, settings.json)
+- ShellCheck in local pre-commit hook for staged shell scripts
+- CI job for functional tests (`bats-tests` in lint workflow)
 - **Spectra CLI** (`bin/spectra`) — install, update, rollback, uninstall, link, unlink, status, doctor, backup commands
 - `bin/json-write.sh` — scoped JSON writer replacing broad `python3 -c *` permission
 - `.github/workflows/release.yml` — automated release with SHA-256 checksums
