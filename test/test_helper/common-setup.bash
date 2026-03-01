@@ -104,3 +104,166 @@ create_fake_repo() {
 
   echo "$repo_dir"
 }
+
+# ---------------------------------------------------------------------------
+# Orchestration test helpers
+# ---------------------------------------------------------------------------
+
+# Create a session directory with standard subdirectories
+# Usage: create_session_dir <skill> <topic>
+# Sets SESSION_DIR to the created path
+create_session_dir() {
+  local skill="$1" topic="$2"
+  local ts
+  ts="$(date +%Y%m%dT%H%M%S)"
+  SESSION_DIR="$SPECTRA_HOME/sessions/$skill/${topic}-${ts}"
+  export SESSION_DIR
+  mkdir -p "$SESSION_DIR"/{opening,discussion,final-positions}
+  echo "$SESSION_DIR"
+}
+
+# Output a valid JSONL event line
+# Usage: make_event <seq> <type> [session_id]
+make_event() {
+  local seq="$1" type="$2" session_id="${3:-test-session-001}"
+  python3 -c "
+import json, uuid, datetime
+print(json.dumps({
+    'event_id': str(uuid.uuid4()),
+    'sequence_number': int('$seq'),
+    'schema_version': '1.0.0',
+    'session_id': '$session_id',
+    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'type': '$type'
+}))"
+}
+
+# Write .active-{skill}-session sentinel file
+# Usage: make_sentinel <skill> <session_dir> <session_id>
+make_sentinel() {
+  local skill="$1" session_dir="$2" session_id="$3"
+  local sentinel_path="$SPECTRA_HOME/.active-${skill}-session"
+  python3 -c "
+import json, datetime
+print(json.dumps({
+    'session_dir': '$session_dir',
+    'session_id': '$session_id',
+    'skill': '$skill',
+    'started_at': datetime.datetime.now(datetime.timezone.utc).isoformat()
+}))" > "$sentinel_path"
+  echo "$sentinel_path"
+}
+
+# Write session.lock with tier-based TTL
+# Usage: make_lock <session_dir> <session_id> [tier]
+make_lock() {
+  local session_dir="$1" session_id="$2" tier="${3:-standard}"
+  local ttl
+  case "$tier" in
+    quick)    ttl=15 ;;
+    standard) ttl=30 ;;
+    deep)     ttl=60 ;;
+    *)        ttl=30 ;;
+  esac
+  python3 -c "
+import json, datetime
+print(json.dumps({
+    'session_id': '$session_id',
+    'tier': '$tier',
+    'ttl_minutes': $ttl,
+    'locked_at': datetime.datetime.now(datetime.timezone.utc).isoformat()
+}))" > "$session_dir/session.lock"
+}
+
+# Write session-state.md checkpoint
+# Usage: make_checkpoint <session_dir> <session_id> <phase>
+make_checkpoint() {
+  local session_dir="$1" session_id="$2" phase="$3"
+  cat > "$session_dir/session-state.md" <<EOF
+## Session
+
+- **Session ID**: $session_id
+- **Phase**: $phase
+
+## Current Phase
+
+$phase in progress.
+
+## Recovery Instructions
+
+Resume from phase $phase using session directory.
+EOF
+}
+
+# Write handoff.md
+# Usage: make_handoff <session_dir> <session_id>
+make_handoff() {
+  local session_dir="$1" session_id="$2"
+  cat > "$session_dir/handoff.md" <<EOF
+## Session
+
+- **Session ID**: $session_id
+
+## Key Findings
+
+- Finding 1: placeholder
+
+## Unresolved
+
+- Item 1: placeholder
+
+## Recommendations
+
+- Recommendation 1: placeholder
+EOF
+}
+
+# Validate checkpoint has required sections
+# Usage: validate_checkpoint <file>
+validate_checkpoint() {
+  local file="$1"
+  local missing=()
+  grep -q "^## Session" "$file" || missing+=("## Session")
+  grep -q "^## Current Phase" "$file" || missing+=("## Current Phase")
+  grep -q "^## Recovery Instructions" "$file" || missing+=("## Recovery Instructions")
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "missing sections: ${missing[*]}" >&2
+    return 1
+  fi
+}
+
+# Validate handoff has required sections
+# Usage: validate_handoff <file>
+validate_handoff() {
+  local file="$1"
+  local missing=()
+  grep -q "^## Session" "$file" || missing+=("## Session")
+  grep -qE "^## (Key Findings|Debate Outcome)" "$file" || missing+=("## Key Findings or ## Debate Outcome")
+  grep -q "^## Unresolved" "$file" || missing+=("## Unresolved")
+  grep -q "^## Recommendations" "$file" || missing+=("## Recommendations")
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "missing sections: ${missing[*]}" >&2
+    return 1
+  fi
+}
+
+# Output a manifest JSONL line
+# Usage: make_manifest_entry <session_id> <project> [tier] [quality]
+make_manifest_entry() {
+  local session_id="$1" project="$2" tier="${3:-standard}" quality="${4:-Full}"
+  python3 -c "
+import json, datetime
+print(json.dumps({
+    'session_id': '$session_id',
+    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'project': '$project',
+    'tier': '$tier',
+    'agent_count': 7,
+    'specialist_count': 1,
+    'quality': '$quality',
+    'duration_seconds': 480,
+    'feedback_rating': None,
+    'has_handoff': False,
+    'session_dirname': None
+}))"
+}
