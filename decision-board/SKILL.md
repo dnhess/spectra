@@ -17,7 +17,7 @@ You (the main Claude instance) act as the **moderator** throughout. You drive ev
 
 If your context seems incomplete (you don't remember the session setup, agents, or current phase), you may have experienced context compaction.
 
-1. Check for `~/.claude/.active-decision-board-session` to find the session directory
+1. Check for `~/.spectra/.active-decision-board-session` to find the session directory
 2. Read `session-state.md` from that directory
 3. Validate the checkpoint (verify section headers and session ID match)
 4. If checkpoint is invalid, replay `decision-events.jsonl` to reconstruct state
@@ -323,7 +323,7 @@ Include a timestamp to ensure uniqueness across sessions.
 Create a namespaced session directory with subdirectories for agent output:
 
 ```
-~/.claude/decision-board-sessions/{topic}-{timestamp}/
+~/.spectra/sessions/decision-board/{topic}-{timestamp}/
   session.lock                  # Lock file with TTL
   decision-events.jsonl         # JSONL event log (moderator-only writer)
   synthesis-brief.json          # Structured synthesis brief (produced by moderator)
@@ -995,11 +995,11 @@ Team teardown (TeamDelete) already happened in Phase 5 step 5. This phase handle
 3. Remove the `session.lock` file
 4. **Generate handoff**: Write `handoff.md` per Persistence Protocol (`~/.claude/skills/shared/orchestration.md` > Session Handoff). Content mapping: Debate Outcome from `synthesis-brief.json` recommended option and consensus strength, Decisions Made from concessions and position shifts, Unresolved from dissenting views to revisit. Log `handoff_written` event.
 5. Write an entry to the cross-session manifest (see below). Set `has_handoff: true` and `session_dirname` to the leaf directory name.
-6. **Delete sentinel**: Remove `~/.claude/.active-decision-board-session`.
+6. **Delete sentinel**: Remove `~/.spectra/.active-decision-board-session`.
 
 ### Cross-Session Manifest
 
-Append one entry per session to `~/.claude/decision-board-sessions/manifest.jsonl`:
+Append one entry per session to `~/.spectra/sessions/decision-board/manifest.jsonl`:
 
 ```jsonl
 {"session_id":"...","timestamp":"ISO-8601","project":"my-app","decision_question":"...","options":["..."],"tier":"standard","agent_count":5,"specialist_count":1,"quality":"Full","duration_seconds":360,"rounds_debated":2,"consensus_strength":0.78,"recommended_option":"hybrid","adopted_option":null,"concessions_count":2,"dissenting_agents_count":1,"feedback_rating":null,"parent_composition_id":null,"parent_session_id":null}
@@ -1120,7 +1120,7 @@ Stale sessions are detected by TTL expiration in the lock file, not by PID check
   tools/
     jsonl-utils.sh            # JSONL query utility
 
-~/.claude/decision-board-sessions/
+~/.spectra/sessions/decision-board/
   manifest.jsonl              # Cross-session analytics manifest
 ```
 

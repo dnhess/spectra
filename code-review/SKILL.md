@@ -9,7 +9,7 @@ description: Use when code needs multi-perspective review before merge. Triggers
 
 If you're reading this after context compression, check for an active session:
 
-1. Look for `~/.claude/.active-code-review-session`
+1. Look for `~/.spectra/.active-code-review-session`
 2. If it exists, read `session-state.md` inside the session directory it points to
 3. Validate the session lock file has not expired
 4. Resume from the phase indicated in `session-state.md`
@@ -703,7 +703,7 @@ Include a timestamp (e.g., `20260301T160514`) for uniqueness.
 **Session directory** — create at:
 
 ```
-~/.claude/code-review-sessions/{session_name}/
+~/.spectra/sessions/code-review/{session_name}/
   session.lock
   review-events.jsonl
   session-state.md
@@ -1528,7 +1528,7 @@ Delete `{session_directory}/session.lock`. If the file does not exist (already c
 
 ### Write Manifest Entry
 
-Append a single-line JSON entry to `~/.claude/code-review-sessions/manifest.jsonl`. The entry includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus the domain-specific fields defined in `event-schemas.md`.
+Append a single-line JSON entry to `~/.spectra/sessions/code-review/manifest.jsonl`. The entry includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus the domain-specific fields defined in `event-schemas.md`.
 
 Write the entry using the JSONL utility:
 
@@ -1547,11 +1547,11 @@ After writing the manifest entry, check file size and entry count:
 3. Use atomic write for truncation: write to a temp file, then rename over the original
 
 ```bash
-line_count=$(wc -l < ~/.claude/code-review-sessions/manifest.jsonl)
-file_size=$(stat -f%z ~/.claude/code-review-sessions/manifest.jsonl 2>/dev/null || stat -c%s ~/.claude/code-review-sessions/manifest.jsonl 2>/dev/null)
+line_count=$(wc -l < ~/.spectra/sessions/code-review/manifest.jsonl)
+file_size=$(stat -f%z ~/.spectra/sessions/code-review/manifest.jsonl 2>/dev/null || stat -c%s ~/.spectra/sessions/code-review/manifest.jsonl 2>/dev/null)
 if [ "$line_count" -gt 1000 ] || [ "$file_size" -gt 512000 ]; then
-  tail -n 750 ~/.claude/code-review-sessions/manifest.jsonl > ~/.claude/code-review-sessions/manifest.jsonl.tmp
-  mv ~/.claude/code-review-sessions/manifest.jsonl.tmp ~/.claude/code-review-sessions/manifest.jsonl
+  tail -n 750 ~/.spectra/sessions/code-review/manifest.jsonl > ~/.spectra/sessions/code-review/manifest.jsonl.tmp
+  mv ~/.spectra/sessions/code-review/manifest.jsonl.tmp ~/.spectra/sessions/code-review/manifest.jsonl
 fi
 ```
 
@@ -1617,7 +1617,7 @@ Write a `handoff_written` event to the JSONL log:
 
 ### Delete Active Session Sentinel
 
-Remove the `~/.claude/.active-code-review-session` sentinel file. This signals to future invocations that no review session is in progress.
+Remove the `~/.spectra/.active-code-review-session` sentinel file. This signals to future invocations that no review session is in progress.
 
 If the file does not exist, continue silently.
 
@@ -1655,13 +1655,13 @@ Update the manifest entry by rewriting the line for this session with `feedback_
 
 On the **next** invocation of the code-review skill (not during the current cleanup), check for stale sessions before starting a new review:
 
-1. Check if `~/.claude/.active-code-review-session` exists
+1. Check if `~/.spectra/.active-code-review-session` exists
 2. If it does, read the session directory path from it
 3. Check `session.lock` inside that directory for TTL expiration
 4. If the lock has expired (timestamp + TTL < now), the previous session is stale
 5. Clean up the stale session:
    - Remove `session.lock`
-   - Remove `~/.claude/.active-code-review-session`
+   - Remove `~/.spectra/.active-code-review-session`
    - Write a `session_end` event with quality `Abandoned` to the stale session's JSONL log
    - Write a manifest entry with status `abandoned`
 6. Inform the user: "Cleaned up stale session from {timestamp}. Starting fresh."
@@ -1841,7 +1841,7 @@ All specialists (pre-built and custom) use the same agent configuration:
   tools/
     jsonl-utils.sh
 
-~/.claude/code-review-sessions/
+~/.spectra/sessions/code-review/
   manifest.jsonl
 ```
 

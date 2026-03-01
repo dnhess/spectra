@@ -443,7 +443,7 @@ Where `n` is the number of agents in `session_start.agents`. A finding is in "te
 
 ## Cross-Session Manifest Schema
 
-Each entry in `~/.claude/code-review-sessions/manifest.jsonl` includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus these domain-specific fields:
+Each entry in `~/.spectra/sessions/code-review/manifest.jsonl` includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus these domain-specific fields:
 
 ```json
 {
