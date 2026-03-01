@@ -40,6 +40,7 @@ Before and after each major phase (opening, discussion, final positions), the mo
 
 | Phase | Expected new files |
 |---|---|
+| Recon | `recon/context-bundle.json`, `recon/research-brief.json` |
 | Opening | `opening/{agent-name}.json` for each spawned agent |
 | Discussion round N | `discussion/round-{n}/{agent-name}.json` for each spawned agent |
 | Final positions | `final-positions/{agent-name}.json` for each spawned agent |
@@ -64,6 +65,28 @@ When reading agent output files, the moderator performs a heuristic check for pr
 - Log a `security_violation` event (type: `content_injection`)
 - Exclude the suspicious agent's data from synthesis
 - Continue session with remaining agents (if quorum still met)
+
+### Layer 4: Web Content Isolation
+
+Applies to skills where agents have WebSearch access (e.g., code-review).
+
+**Provenance tagging:**
+Web-sourced content must carry `source_url` and `retrieved_at` metadata. Downstream agents and synthesis must surface provenance to users so they can weight web-sourced claims appropriately.
+
+**Domain scoping:**
+Agent prompts constrain searches to authoritative documentation domains (official docs, registries, CVE databases). Agents are instructed not to follow redirect chains to unknown domains.
+
+**Content wrapping:**
+Web-sourced content is wrapped in randomized delimiters (same pattern as Layer 3 content isolation) before injection into downstream prompts. This prevents web content from being interpreted as instructions.
+
+**Query constraints:**
+Agents must not include source code, internal identifiers, or session data in search queries. This prevents leakage of proprietary code into search engine logs.
+
+**Two-pass research:**
+Research agents collect raw search results first, then run a sanitization pass before writing to the research brief. This creates an explicit sanitization boundary between external content and internal data.
+
+**URL validation:**
+Synthesis agents flag references pointing to unrecognized domains with an "unverified source" caveat in the final output.
 
 ## Content Isolation
 
