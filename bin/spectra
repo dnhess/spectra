@@ -791,13 +791,15 @@ cmd_status() {
     echo "  Mode:     release"
   fi
 
-  # Check for latest version
-  if local release_json; release_json="$(fetch_latest_release 2>/dev/null)"; then
-    local latest
-    latest="$(get_release_tag "$release_json" 2>/dev/null || echo "")"
-    latest="${latest#v}"
-    if [[ -n "$latest" ]] && [[ "$latest" != "$version" ]]; then
-      echo "  Latest:   $latest (update available)"
+  # Check for latest version (skip in dev mode — repo is source of truth)
+  if [[ "$mode" != "dev" ]]; then
+    if local release_json; release_json="$(fetch_latest_release 2>/dev/null)"; then
+      local latest
+      latest="$(get_release_tag "$release_json" 2>/dev/null || echo "")"
+      latest="${latest#v}"
+      if [[ -n "$latest" ]] && [[ "$latest" != "$version" ]]; then
+        echo "  Latest:   $latest (update available)"
+      fi
     fi
   fi
 
