@@ -87,11 +87,11 @@ get_release_tag() {
 get_release_asset_url() {
   local release_json="$1"
   local asset_name="$2"
-  echo "$release_json" | python3 -c "
-import sys, json
+  echo "$release_json" | ASSET_NAME="$asset_name" python3 -c "
+import sys, json, os
 release = json.load(sys.stdin)
 for asset in release.get('assets', []):
-    if asset['name'] == '$asset_name':
+    if asset['name'] == os.environ['ASSET_NAME']:
         print(asset['browser_download_url'])
         sys.exit(0)
 print('', end='')
@@ -271,12 +271,12 @@ settings_merge_permissions() {
 
   # Merge or remove permissions
   local updated
-  updated="$(echo "$current" | python3 -c "
-import sys, json
+  updated="$(echo "$current" | SPECTRA_PERMS="$spectra_perms" MERGE_ACTION="$action" python3 -c "
+import sys, json, os
 
 settings = json.load(sys.stdin)
-spectra_perms = json.loads('$spectra_perms')
-action = '$action'
+spectra_perms = json.loads(os.environ['SPECTRA_PERMS'])
+action = os.environ['MERGE_ACTION']
 
 perms = settings.get('permissions', {})
 allow = perms.get('allow', [])
@@ -699,7 +699,7 @@ cmd_link() {
 
   # Save current symlink targets for unlink restoration
   local manifest="$SPECTRA_HOME/dev-link-manifest.json"
-  python3 -c "
+  MANIFEST_PATH="$manifest" python3 -c "
 import json, os
 targets = {}
 skills_dir = os.path.expanduser('~/.claude/skills')
@@ -707,7 +707,7 @@ for skill in ['shared', 'deep-design', 'decision-board', 'code-review']:
     link = os.path.join(skills_dir, skill)
     if os.path.islink(link):
         targets[skill] = os.readlink(link)
-json.dump(targets, open('$manifest', 'w'), indent=2)
+json.dump(targets, open(os.environ['MANIFEST_PATH'], 'w'), indent=2)
 print()
 "
   log_success "Saved current symlink targets"
@@ -903,10 +903,10 @@ cmd_doctor() {
     local spectra_perms
     spectra_perms="$(get_spectra_permissions)"
     local missing_count
-    missing_count="$(python3 -c "
-import json
-settings = json.load(open('$settings_file'))
-spectra = json.loads('$spectra_perms')
+    missing_count="$(SETTINGS_FILE="$settings_file" SPECTRA_PERMS="$spectra_perms" python3 -c "
+import json, os
+settings = json.load(open(os.environ['SETTINGS_FILE']))
+spectra = json.loads(os.environ['SPECTRA_PERMS'])
 allow = settings.get('permissions', {}).get('allow', [])
 missing = [p for p in spectra if p not in allow]
 print(len(missing))
@@ -1016,7 +1016,7 @@ cmd_backup() {
       fi
 
       # Validate
-      python3 -c "import json; json.load(open('$backup_file'))" 2>/dev/null \
+      BACKUP_FILE="$backup_file" python3 -c "import json, os; json.load(open(os.environ['BACKUP_FILE']))" 2>/dev/null \
         || { log_error "Backup is not valid JSON"; exit 1; }
 
       # Backup current before restoring
