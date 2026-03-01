@@ -7,15 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-01
+
 ### Fixed
 
 - Trap collision across install/update where cleanup handlers silently overwrote each other
 - Rollback not updating VERSION_FILE, causing `spectra status` to report wrong version
 - Shell variable injection into python3 -c strings (defense-in-depth hardening)
+- `spectra status` showing misleading "update available" in dev mode
+- `spectra unlink` failing with "same file" error when restoring CLI copies
 
 ### Changed
 
 - Extracted download-verify-extract into shared `download_and_verify_release()` function, eliminating 3-way duplication
+- `spectra link` now symlinks CLI bin files to repo so dev changes are picked up immediately
 
 ## [0.2.1] - 2026-03-01
 

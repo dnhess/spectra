@@ -2,7 +2,7 @@
 # spectra — Spectra CLI for managing multi-agent skills
 set -euo pipefail
 
-readonly SPECTRA_VERSION="0.2.0"
+readonly SPECTRA_VERSION="0.2.2"
 readonly SPECTRA_HOME="$HOME/.spectra"
 readonly CLAUDE_HOME="$HOME/.claude"
 readonly SKILLS_DIR="$SPECTRA_HOME/skills"
