@@ -1,1 +1,10 @@
 npm run lint
+
+# ShellCheck on staged shell scripts
+staged_sh=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.sh$' || true)
+staged_bin=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^bin/' || true)
+files_to_check=$(echo "$staged_sh $staged_bin" | xargs)
+if [ -n "$files_to_check" ]; then
+  echo "Running ShellCheck..."
+  shellcheck $files_to_check || exit 1
+fi
