@@ -532,6 +532,9 @@ cmd_update() {
   mv "$_DVR_EXTRACT_DIR" "$staging_dir"
   install_bin_files "$staging_dir"
 
+  # Save current version for rollback
+  echo "$current_version" > "$SPECTRA_HOME/prev-version"
+
   # Atomic swap
   atomic_swap "$SKILLS_DIR" "$staging_dir" "$SPECTRA_HOME/skills-prev"
   log_success "Skills updated (previous version preserved for rollback)"
@@ -570,10 +573,18 @@ cmd_rollback() {
   mv "$prev_dir" "$SKILLS_DIR"
   mv "$failed_dir" "$prev_dir"
 
+  # Update VERSION_FILE from prev-version marker
+  local current_version prev_version
+  current_version="$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")"
+  prev_version="$(cat "$SPECTRA_HOME/prev-version" 2>/dev/null || echo "")"
+  if [[ -n "$prev_version" ]]; then
+    echo "$prev_version" > "$VERSION_FILE"
+    echo "$current_version" > "$SPECTRA_HOME/prev-version"
+  fi
+
   # Refresh symlinks
   create_skill_symlinks "$SKILLS_DIR"
 
-  # Read version from rolled-back skills (if version marker exists)
   log_success "Rolled back successfully"
   log_info "Run 'spectra rollback' again to swap back"
 }
