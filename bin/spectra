@@ -779,14 +779,16 @@ cmd_unlink() {
     if [[ -f "$SKILLS_DIR/bin/spectra" ]]; then
       install_bin_files "$SKILLS_DIR"
     else
-      # bin/ was already removed during install; copy from the installed bin
-      # The symlinks still point to the repo, so resolve and copy
+      # bin/ was already removed during install; copy from the dev repo
+      # Remove symlinks first to avoid "same file" error from cp
       local repo_path
       repo_path="$(cat "$SPECTRA_HOME/dev-repo" 2>/dev/null || echo "")"
       if [[ -n "$repo_path" ]] && [[ -f "$repo_path/bin/spectra" ]]; then
+        rm -f "$BIN_DIR/spectra"
         cp "$repo_path/bin/spectra" "$BIN_DIR/spectra"
         chmod +x "$BIN_DIR/spectra"
         if [[ -f "$repo_path/bin/json-write.sh" ]]; then
+          rm -f "$BIN_DIR/json-write.sh"
           cp "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
           chmod +x "$BIN_DIR/json-write.sh"
         fi
