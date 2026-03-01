@@ -354,8 +354,13 @@ Each entry in `~/.claude/decision-board-sessions/manifest.jsonl` has this schema
   "concessions_count": 2,
   "dissenting_agents_count": 1,
   "feedback_rating": "very_helpful | somewhat_helpful | not_helpful | null",
-  "adopted_option": "hybrid | null"
+  "adopted_option": "hybrid | null",
+  "parent_composition_id": null,
+  "parent_session_id": null
 }
 ```
 
 Fields `feedback_rating` and `adopted_option` are nullable. `feedback_rating` and `adopted_option` are populated after user provides post-decision feedback.
+
+- `parent_composition_id`: If this session was invoked via composition, the `composition_id` from the parent. `null` for standalone sessions.
+- `parent_session_id`: If this session was invoked via composition, the parent skill's `session_id`. `null` for standalone sessions.

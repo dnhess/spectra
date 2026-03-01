@@ -109,9 +109,16 @@ A discussion topic has been resolved or deferred.
   "id": "T001",
   "status": "resolved | deferred",
   "summary": "Cursor-based pagination with offset fallback for admin views",
-  "round": 1
+  "round": 1,
+  "resolved_by": "discussion | escalation | composition | deferred",
+  "composition_id": null
 }
 ```
+
+Optional fields:
+
+- `resolved_by`: How the topic was resolved. `discussion` (agents converged), `escalation` (user decided), `composition` (child skill resolved via composition protocol), `deferred` (postponed). Defaults to `discussion` for backward compatibility.
+- `composition_id`: If `resolved_by` is `composition`, the `composition_id` linking to the `composition_invoked`/`composition_completed` events. `null` otherwise.
 
 ### `escalation`
 
@@ -187,9 +194,14 @@ The `session_end` event (defined in shared base) includes these additional field
 {
   "topics_total": 5,
   "topics_resolved": 4,
-  "topics_escalated": 1
+  "topics_escalated": 1,
+  "compositions_invoked": 0,
+  "topics_resolved_by_composition": 0
 }
 ```
+
+- `compositions_invoked`: Number of skill compositions invoked during the session (0 or 1, max 1 per session).
+- `topics_resolved_by_composition`: Number of topics resolved via composition (subset of `topics_resolved`).
 
 ## JSONL Write Semantics
 
@@ -235,8 +247,13 @@ Each entry in `~/.claude/deep-design-sessions/manifest.jsonl` has this schema:
   "findings_major": 7,
   "findings_minor": 2,
   "feedback_rating": "very_helpful | somewhat_helpful | not_helpful | null",
-  "feedback": null
+  "feedback": null,
+  "compositions_invoked": 0,
+  "composition_ids": []
 }
 ```
 
 Fields `feedback_rating` and `feedback` are nullable (populated after user provides post-review feedback).
+
+- `compositions_invoked`: Number of skill compositions invoked during the session (0 or 1).
+- `composition_ids`: Array of `composition_id` strings from any `composition_invoked` events. Empty array if no compositions.

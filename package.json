@@ -3,7 +3,7 @@
   "description": "Spectra — multi-agent deliberation skills for Claude Code",
   "scripts": {
     "prepare": "husky",
-    "lint": "markdownlint-cli2 '**/*.md'",
+    "lint": "markdownlint-cli2 '**/*.md' '#node_modules' '#.claude'",
     "lint:commits": "commitlint --from HEAD~1"
   },
   "devDependencies": {

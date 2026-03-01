@@ -149,6 +149,62 @@ Logged when the moderator's post-phase directory audit detects unexpected file a
 - `path_escape`: A write attempt targeted a path outside the session directory
 - `action_taken`: `flagged` (logged only), `excluded` (data excluded from synthesis), `session_halted` (session aborted)
 
+### `composition_invoked`
+
+Written by the parent skill's moderator when a composition is initiated. See `~/.claude/skills/shared/composition.md` for the full composition protocol.
+
+```json
+{
+  "event_id": "uuid",
+  "sequence_number": 12,
+  "schema_version": "1.0.0",
+  "type": "composition_invoked",
+  "timestamp": "ISO-8601",
+  "composition_id": "comp-{uuid}",
+  "child_skill": "decision-board",
+  "child_tier": "standard",
+  "trigger_reason": "deadlock on T002 — MFA scope",
+  "request_file": "composition-request.json"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `composition_id` | String | Unique identifier for this composition (`comp-{uuid}`) |
+| `child_skill` | String | The skill being invoked as the child |
+| `child_tier` | String | Tier the child will run at (one below parent) |
+| `trigger_reason` | String | Human-readable reason for the composition |
+| `request_file` | String | Filename of the composition request (always `composition-request.json`) |
+
+### `composition_completed`
+
+Written by the parent skill's moderator after the child skill finishes. Pairs with a prior `composition_invoked` event via `composition_id`.
+
+```json
+{
+  "event_id": "uuid",
+  "sequence_number": 13,
+  "schema_version": "1.0.0",
+  "type": "composition_completed",
+  "timestamp": "ISO-8601",
+  "composition_id": "comp-{uuid}",
+  "child_session_id": "decision-board-mfa-scope-20260228T170100",
+  "child_session_dir": "~/.claude/decision-board-sessions/mfa-scope-20260228T170100/",
+  "child_quality": "Full",
+  "outcome_summary": "Recommended: MFA for admin roles now, all users in v2. 85% consensus.",
+  "parent_event_id": "uuid-of-composition_invoked"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `composition_id` | String | Matches the `composition_invoked` event |
+| `child_session_id` | String | The child skill's session ID |
+| `child_session_dir` | String | Path to the child's session directory |
+| `child_quality` | String | Child session quality (`Full`, `Partial`, `Minimal`, or `Error`) |
+| `outcome_summary` | String | Human-readable summary of the child's result |
+| `parent_event_id` | String | `event_id` of the corresponding `composition_invoked` event |
+
 ## JSONL Write Semantics
 
 - **Single writer**: The moderator writes ALL events throughout the entire session. No writer handoff.

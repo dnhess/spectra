@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Skill composition protocol** (`shared/composition.md`) — generic protocol enabling any skill to invoke another skill mid-session with sequential composition, user gating, and tier downgrade
+- **Inline mini-debate** — deep-design can now invoke decision-board to resolve deadlocked discussion topics via `[d] Deliberate` option at the escalation prompt
+- `composition_invoked` and `composition_completed` event types in `shared/event-schemas-base.md`
+- `resolved_by` and `composition_id` fields on deep-design `topic_resolved` events
+- `compositions_invoked` and `topics_resolved_by_composition` fields on deep-design `session_end` events
+- `composition_id` and `parent_session_id` fields on decision-board `session_start` events
+- `parent_composition_id` and `parent_session_id` fields on decision-board manifest entries
+- Composition input handling in decision-board Phase 1 (reads `composition-request.json` to bootstrap sessions)
+
 ## [0.1.0] - 2026-02-28
 
 ### Added
