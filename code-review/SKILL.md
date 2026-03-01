@@ -1146,3 +1146,374 @@ After each discussion round, write a checkpoint to `session-state.md` using the 
 - Finding states (open, challenged, upheld, withdrawn, modified)
 - Topic states (open, resolved, deferred)
 - Convergence trigger (if discussion ended early)
+
+## Phase 4: Final Positions
+
+**Skipped for Quick tier.** Quick tier proceeds directly from Phase 2 to Phase 5 (Synthesis).
+
+Each reviewer submits their top findings after debate, with updated severity, confidence, and file:line references. This phase captures each reviewer's considered final opinion after exposure to challenges and counter-arguments.
+
+### Agent Config
+
+Fresh agents per reviewer (NOT reusing discussion agents). One agent per reviewer who participated in the opening round.
+
+- `subagent_type`: `"general-purpose"`
+- `mode`: `"bypassPermissions"`
+- `model`: `"opus"`
+- `max_turns`: 20
+- `run_in_background`: true
+
+### Final Position Agent Prompt Template
+
+```
+{persona file contents from ~/.claude/skills/code-review/personas/{reviewer-name}.md}
+
+## Session Context
+You participated in a code review of {review_target}.
+
+### Your original findings:
+{findings from opening round for this reviewer}
+
+### Discussion outcomes:
+{relevant discussion results — which findings were challenged, upheld, withdrawn, modified}
+
+## Your Task
+Submit your final positions — your top findings after debate.
+
+Write your final positions as a JSON file to:
+  `{session_directory}/final-positions/{your-agent-name}.json`
+
+Schema:
+{
+  "reviewer": "{your-agent-name}",
+  "top_findings": [
+    {
+      "finding_id": "finding-uuid",
+      "final_severity": "critical | major | minor | nit",
+      "final_confidence": "high | medium | low",
+      "summary": "One-sentence summary of the finding after debate",
+      "file_path": "path/to/file",
+      "line_range": [start, end]
+    }
+  ],
+  "withdrawn_findings": ["finding-uuid-1", "finding-uuid-2"],
+  "new_observations": "Optional: anything new discovered during discussion that wasn't in the original findings"
+}
+
+## Rules
+- Write ONLY to the path above
+- Use python3 for JSON serialization
+- Include only findings in open, upheld, or modified state
+- Do NOT include withdrawn findings in top_findings
+- After writing your file, you are done
+```
+
+### Polling
+
+Poll for final position agent output files:
+
+- **Pattern**: `{session_directory}/final-positions/*.json`
+- **Method**: Glob
+- **Interval**: ~10 seconds
+- **Timeout**: 90 seconds
+
+On timeout, write an `agent_complete` event with `status: "timeout"` for the missing agent. Continue processing with whatever positions arrived.
+
+### Phase Boundary Validation (Final Positions to Synthesis)
+
+At least one finding must be in `open`, `upheld`, or `modified` state across all final position files. If no findings remain (all withdrawn), warn the user but continue to synthesis — the synthesis output will reflect an empty findings list.
+
+### Post-Phase Processing
+
+1. **Read** all final position files from `final-positions/`.
+2. **Write `final_position` events** to the JSONL log — one event per reviewer with their top findings (see `code-review/event-schemas.md` for schema).
+3. **Write `agent_complete` events** for each final position agent.
+4. **Post-phase directory audit** on `final-positions/`. Any unexpected files (not matching the expected `{reviewer-name}.json` pattern) trigger a `security_violation` event. See `~/.claude/skills/shared/security.md` for the audit protocol.
+5. **Write `phase_transition` event** to proceed to Phase 5 (Synthesis).
+
+### Checkpoint
+
+After final positions are collected, write a checkpoint to `session-state.md` using the atomic write pattern from `~/.claude/skills/shared/orchestration.md`. The checkpoint includes:
+
+- Phase: `final-positions`
+- Per-reviewer final finding lists
+- Overall finding state summary (upheld, withdrawn, modified counts)
+
+## Phase 5: Synthesis
+
+Synthesis aggregates all review output into a human-readable findings report. The moderator builds a synthesis brief, then a standalone agent produces the final markdown output.
+
+### Moderator Produces synthesis-brief.json
+
+The moderator reads all output files (opening findings, discussion responses, final positions) and produces `{session_directory}/synthesis-brief.json`:
+
+```json
+{
+  "session_id": "{session_id}",
+  "review_target": "path/to/target",
+  "tier": "{tier}",
+  "agent_count": 6,
+  "findings": {
+    "critical": [
+      {
+        "id": "finding-uuid",
+        "title": "SQL injection via unsanitized user input",
+        "reviewer": "security-auditor",
+        "file_path": "src/db/query.ts",
+        "line_range": [42, 58],
+        "description": "User input is interpolated directly into SQL queries without parameterization.",
+        "recommendation": "Use parameterized queries via the ORM's built-in escaping.",
+        "confidence": "high",
+        "state": "upheld",
+        "debate_notes": "Challenged by design-critic in round 1, upheld with evidence",
+        "references": ["https://owasp.org/www-community/attacks/SQL_Injection"]
+      }
+    ],
+    "major": [],
+    "minor": [],
+    "nit": []
+  },
+  "topics": [
+    {
+      "id": "T001",
+      "title": "SQL injection severity dispute",
+      "status": "resolved",
+      "resolution": "Upheld as critical after evidence review"
+    }
+  ],
+  "metrics": {
+    "agents_active": 6,
+    "agents_timed_out": 0,
+    "findings_total": 15,
+    "findings_upheld": 10,
+    "findings_withdrawn": 3,
+    "findings_modified": 2,
+    "quality": "Full"
+  }
+}
+```
+
+Quality is determined by agent completion rate:
+
+| Agents Completed | Quality |
+|---|---|
+| All agents | Full |
+| 50%+ agents | Partial |
+| Below 50% | Minimal |
+
+### Merge Semantics
+
+When multiple reviewers report the same underlying issue (same file, overlapping line ranges, same root cause):
+
+1. **Highest severity wins** — the merged finding takes the most severe rating.
+2. **All unique recommendations kept** — combine distinct recommendations from each reviewer.
+3. **Merge noted in output** — write a `finding_merged` event to the JSONL log with the IDs of the source findings and the resulting merged finding ID.
+4. **Credit all reporters** — the merged finding lists all contributing reviewers.
+
+The moderator performs merging when building `synthesis-brief.json`, before handing off to the synthesis agent.
+
+### Write session_complete Sentinel
+
+Write a `session_complete` event to the JSONL log with `final_sequence_number` set to the current sequence number. This signals to the synthesis agent that all review data is finalized and safe to read.
+
+```json
+{
+  "type": "session_complete",
+  "sequence": 42,
+  "session_id": "{session_id}",
+  "final_sequence_number": 42,
+  "timestamp": "ISO-8601"
+}
+```
+
+### TeamDelete
+
+Shut down the review team. Send `shutdown_request` messages to all active teammates, wait for confirmations, then call TeamDelete to clean up team resources. This happens before spawning the synthesis agent — synthesis is a standalone operation.
+
+### Spawn Synthesis Agent
+
+Spawn a standalone synthesis agent (NOT a team member):
+
+- `subagent_type`: `"general-purpose"`
+- `mode`: `"bypassPermissions"`
+- `model`: `"sonnet"`
+- `max_turns`: 30
+
+The synthesis agent:
+
+1. **Validates** `session_complete` sentinel exists in the JSONL log.
+2. **Reads** `synthesis-brief.json` as its primary input.
+3. **Produces** `{session_directory}/review-findings.md` with the structure below.
+
+### Standard Tier and Deep Tier Output Format
+
+The synthesis agent produces `review-findings.md` with this structure:
+
+```markdown
+# Code Review Findings — {review_target}
+
+**Date:** {date}
+**Tier:** {tier}
+**Reviewers:** {count} ({list})
+
+## Summary
+
+{3-5 sentence executive summary}
+
+## Critical Findings
+
+### [F1] {title}
+**File:** {file_path}:{line_range}
+**Category:** {category} | **Confidence:** {confidence}
+**Reviewer:** {reviewer}
+
+{description}
+
+**Recommendation:** {recommendation}
+
+**Debate:** {debate notes if any}
+
+**References:** {references if any}
+
+---
+
+## Major Findings
+...
+
+## Minor Findings
+...
+
+## Nits
+...
+
+## Withdrawn Findings
+{findings that were retracted during discussion, with reason}
+
+## Session Metrics
+- Findings: {total} total ({upheld} upheld, {withdrawn} withdrawn, {modified} modified)
+- Discussion: {rounds} round(s), {topics_resolved} topics resolved
+- Quality: {Full|Partial|Minimal}
+```
+
+Findings within each severity section are ordered by confidence (high first), then by file path for stable ordering.
+
+### Quick Tier Synthesis
+
+Quick tier skips discussion and final positions. Synthesis reads directly from `opening/*.json` files instead of `synthesis-brief.json`. The moderator still builds `synthesis-brief.json` but populates it from opening findings only (no debate notes, no state changes).
+
+Quick tier output is a prioritized checklist rather than a full report:
+
+```markdown
+## Code Review Checklist — {review_target}
+
+### Critical
+- [ ] {title} — {file_path}:{line} ({reviewer})
+
+### Major
+- [ ] {title} — {file_path}:{line} ({reviewer})
+
+### Minor
+- [ ] {title} — {file_path}:{line} ({reviewer})
+
+### Nits
+- [ ] {title} — {file_path}:{line} ({reviewer})
+```
+
+### Post-Synthesis Directory Audit
+
+After the synthesis agent completes, validate the entire session directory against the file-write allowlist:
+
+**Allowed files** (in session root):
+
+- `review-events.jsonl`
+- `synthesis-brief.json`
+- `topics.json`
+- `session.lock`
+- `session-state.md`
+- `review-findings.md`
+
+**Allowed directories and patterns**:
+
+- `recon/*.json`
+- `opening/*.json`
+- `discussion/round-*/*.json`
+- `final-positions/*.json`
+
+Any file not matching the allowlist triggers a `security_violation` event and a user warning. See `~/.claude/skills/shared/security.md` for the audit protocol.
+
+### Write session_end Event
+
+Write the final `session_end` event to close the JSONL log:
+
+```json
+{
+  "type": "session_end",
+  "sequence": 43,
+  "session_id": "{session_id}",
+  "timestamp": "ISO-8601",
+  "quality": "Full",
+  "agent_count": 6,
+  "findings_critical": 3,
+  "findings_major": 7,
+  "findings_minor": 12,
+  "findings_nit": 5,
+  "findings_withdrawn": 2,
+  "composition_used": false
+}
+```
+
+### Present to User
+
+Match deep-design terminal state patterns. Three presentation modes based on findings:
+
+**All Clear** (zero critical and zero major findings):
+
+```
+Review complete — clean bill of health.
+
+{minor_count} minor | {nit_count} nit
+
+Files:
+  {session_directory}/review-findings.md
+  {session_directory}/synthesis-brief.json
+  {session_directory}/review-events.jsonl
+```
+
+**Findings Only** (one or more critical or major findings):
+
+```
+Review complete — {critical_count} critical | {major_count} major | {minor_count} minor | {nit_count} nit
+
+## Executive Summary
+{3-5 sentences from the synthesis report}
+
+## Top Findings
+1. {finding title} [{severity}] — {file_path}:{line}
+2. {finding title} [{severity}] — {file_path}:{line}
+3. {finding title} [{severity}] — {file_path}:{line}
+
+Files:
+  {session_directory}/review-findings.md
+  {session_directory}/synthesis-brief.json
+  {session_directory}/review-events.jsonl
+```
+
+**Partial Failure** (one or more agents timed out, quality is Partial or Minimal):
+
+```
+Review complete with reduced coverage ({quality}).
+{agents_active}/{agent_count} reviewers completed.
+
+{critical_count} critical | {major_count} major | {minor_count} minor | {nit_count} nit
+
+## Executive Summary
+{3-5 sentences}
+
+## Top Findings
+1. {finding title} [{severity}] — {file_path}:{line}
+
+Files:
+  {session_directory}/review-findings.md
+  {session_directory}/synthesis-brief.json
+  {session_directory}/review-events.jsonl
+```
