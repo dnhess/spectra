@@ -121,6 +121,49 @@ verify_checksum() {
   log_success "Checksum verified"
 }
 
+# --- Download and verify release (shared by install, update, unlink) ---
+
+# Sets globals: _DVR_TAG, _DVR_EXTRACT_DIR, _DVR_TMP_DIR
+# Pushes tmp_dir cleanup onto stack — caller must pop_cleanup + rm when done
+download_and_verify_release() {
+  log_info "Fetching latest release..."
+  local release_json
+  release_json="$(fetch_latest_release)"
+
+  _DVR_TAG="$(get_release_tag "$release_json")"
+
+  local tarball_name="spectra-${_DVR_TAG}.tar.gz"
+  local tarball_url checksums_url
+  tarball_url="$(get_release_asset_url "$release_json" "$tarball_name")"
+  checksums_url="$(get_release_asset_url "$release_json" "checksums.txt")"
+
+  _DVR_TMP_DIR="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  push_cleanup "rm -rf '$_DVR_TMP_DIR'"
+
+  curl -fsSL -o "$_DVR_TMP_DIR/$tarball_name" "$tarball_url"
+  curl -fsSL -o "$_DVR_TMP_DIR/checksums.txt" "$checksums_url"
+  verify_checksum "$_DVR_TMP_DIR/$tarball_name" "$_DVR_TMP_DIR/checksums.txt"
+
+  _DVR_EXTRACT_DIR="$_DVR_TMP_DIR/extracted"
+  mkdir -p "$_DVR_EXTRACT_DIR"
+  tar -xzf "$_DVR_TMP_DIR/$tarball_name" -C "$_DVR_EXTRACT_DIR/"
+}
+
+# Copy bin/spectra and bin/json-write.sh from extract dir to BIN_DIR
+install_bin_files() {
+  local extract_dir="$1"
+  if [[ -f "$extract_dir/bin/spectra" ]]; then
+    cp "$extract_dir/bin/spectra" "$BIN_DIR/spectra"
+    chmod +x "$BIN_DIR/spectra"
+  fi
+  if [[ -f "$extract_dir/bin/json-write.sh" ]]; then
+    cp "$extract_dir/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+    chmod +x "$BIN_DIR/json-write.sh"
+  fi
+  rm -rf "${extract_dir:?}/bin"
+}
+
 # --- Atomic swap ---
 
 atomic_swap() {
@@ -391,47 +434,16 @@ cmd_install() {
   fi
   detect_checksum_cmd >/dev/null
 
-  # Download
-  log_info "Fetching latest release..."
-  local release_json
-  release_json="$(fetch_latest_release)"
-  local tag
-  tag="$(get_release_tag "$release_json")"
-  local version="${tag#v}"
+  # Download, verify, and extract
+  download_and_verify_release
+  local version="${_DVR_TAG#v}"
   log_info "Latest version: $version"
 
-  local tarball_name="spectra-${tag}.tar.gz"
-  local tarball_url checksums_url
-  tarball_url="$(get_release_asset_url "$release_json" "$tarball_name")"
-  checksums_url="$(get_release_asset_url "$release_json" "checksums.txt")"
-
-  local tmp_dir
-  tmp_dir="$(mktemp -d)"
-  # shellcheck disable=SC2064
-  push_cleanup "rm -rf '$tmp_dir'"
-
-  curl -fsSL -o "$tmp_dir/$tarball_name" "$tarball_url"
-  curl -fsSL -o "$tmp_dir/checksums.txt" "$checksums_url"
-
-  # Verify checksum
-  verify_checksum "$tmp_dir/$tarball_name" "$tmp_dir/checksums.txt"
-
-  # Extract and place
+  # Place skills and bin files
   mkdir -p "$SPECTRA_HOME"/{skills,sessions,backups,bin}
-  tar -xzf "$tmp_dir/$tarball_name" -C "$SPECTRA_HOME/skills/"
+  cp -R "$_DVR_EXTRACT_DIR"/* "$SPECTRA_HOME/skills/"
+  install_bin_files "$SPECTRA_HOME/skills"
   log_success "Extracted skills to $SKILLS_DIR"
-
-  # Install CLI and json-write.sh from tarball bin/
-  if [[ -f "$SPECTRA_HOME/skills/bin/spectra" ]]; then
-    cp "$SPECTRA_HOME/skills/bin/spectra" "$BIN_DIR/spectra"
-    chmod +x "$BIN_DIR/spectra"
-  fi
-  if [[ -f "$SPECTRA_HOME/skills/bin/json-write.sh" ]]; then
-    cp "$SPECTRA_HOME/skills/bin/json-write.sh" "$BIN_DIR/json-write.sh"
-    chmod +x "$BIN_DIR/json-write.sh"
-  fi
-  # Remove bin/ from skills/ (it's a CLI artifact, not a skill)
-  rm -rf "$SPECTRA_HOME/skills/bin"
 
   echo "$version" > "$VERSION_FILE"
   echo "release" > "$MODE_FILE"
@@ -482,7 +494,7 @@ cmd_install() {
   fi
 
   pop_cleanup
-  rm -rf "$tmp_dir"
+  rm -rf "$_DVR_TMP_DIR"
 }
 
 cmd_update() {
@@ -503,49 +515,22 @@ cmd_update() {
   current_version="$(cat "$VERSION_FILE" 2>/dev/null || echo "unknown")"
   log_info "Current version: $current_version"
 
-  log_info "Fetching latest release..."
-  local release_json
-  release_json="$(fetch_latest_release)"
-  local tag
-  tag="$(get_release_tag "$release_json")"
-  local version="${tag#v}"
+  # Download, verify, and extract
+  download_and_verify_release
+  local version="${_DVR_TAG#v}"
 
   if [[ "$current_version" == "$version" ]]; then
     log_success "Already up to date ($version)"
+    pop_cleanup
+    rm -rf "$_DVR_TMP_DIR"
     exit 0
   fi
   log_info "New version available: $version"
 
-  # Download
-  local tarball_name="spectra-${tag}.tar.gz"
-  local tarball_url checksums_url
-  tarball_url="$(get_release_asset_url "$release_json" "$tarball_name")"
-  checksums_url="$(get_release_asset_url "$release_json" "checksums.txt")"
-
-  local tmp_dir
-  tmp_dir="$(mktemp -d)"
-  # shellcheck disable=SC2064
-  push_cleanup "rm -rf '$tmp_dir'"
-
-  curl -fsSL -o "$tmp_dir/$tarball_name" "$tarball_url"
-  curl -fsSL -o "$tmp_dir/checksums.txt" "$checksums_url"
-  verify_checksum "$tmp_dir/$tarball_name" "$tmp_dir/checksums.txt"
-
-  # Extract to staging
+  # Move extracted content to staging and install bin files
   local staging_dir="$SPECTRA_HOME/skills-staging"
-  mkdir -p "$staging_dir"
-  tar -xzf "$tmp_dir/$tarball_name" -C "$staging_dir/"
-
-  # Update bin/ from staging
-  if [[ -f "$staging_dir/bin/spectra" ]]; then
-    cp "$staging_dir/bin/spectra" "$BIN_DIR/spectra"
-    chmod +x "$BIN_DIR/spectra"
-  fi
-  if [[ -f "$staging_dir/bin/json-write.sh" ]]; then
-    cp "$staging_dir/bin/json-write.sh" "$BIN_DIR/json-write.sh"
-    chmod +x "$BIN_DIR/json-write.sh"
-  fi
-  rm -rf "${staging_dir:?}/bin"
+  mv "$_DVR_EXTRACT_DIR" "$staging_dir"
+  install_bin_files "$staging_dir"
 
   # Atomic swap
   atomic_swap "$SKILLS_DIR" "$staging_dir" "$SPECTRA_HOME/skills-prev"
@@ -566,7 +551,7 @@ cmd_update() {
   log_info "Run 'spectra rollback' to revert if needed"
 
   pop_cleanup
-  rm -rf "$tmp_dir"
+  rm -rf "$_DVR_TMP_DIR"
 }
 
 cmd_rollback() {
@@ -759,27 +744,16 @@ cmd_unlink() {
   # If skills dir is empty (first install was dev mode), re-download
   if [[ ! -d "$SKILLS_DIR/shared" ]]; then
     log_info "No release skills found — downloading latest..."
-    local release_json
-    release_json="$(fetch_latest_release)"
-    local tag
-    tag="$(get_release_tag "$release_json")"
-    local tarball_name="spectra-${tag}.tar.gz"
-    local tarball_url checksums_url
-    tarball_url="$(get_release_asset_url "$release_json" "$tarball_name")"
-    checksums_url="$(get_release_asset_url "$release_json" "checksums.txt")"
-
-    local tmp_dir
-    tmp_dir="$(mktemp -d)"
-    curl -fsSL -o "$tmp_dir/$tarball_name" "$tarball_url"
-    curl -fsSL -o "$tmp_dir/checksums.txt" "$checksums_url"
-    verify_checksum "$tmp_dir/$tarball_name" "$tmp_dir/checksums.txt"
+    download_and_verify_release
 
     mkdir -p "$SKILLS_DIR"
-    tar -xzf "$tmp_dir/$tarball_name" -C "$SKILLS_DIR/"
-    rm -rf "$tmp_dir"
+    cp -R "$_DVR_EXTRACT_DIR"/* "$SKILLS_DIR/"
+
+    pop_cleanup
+    rm -rf "$_DVR_TMP_DIR"
 
     create_skill_symlinks "$SKILLS_DIR"
-    echo "${tag#v}" > "$VERSION_FILE"
+    echo "${_DVR_TAG#v}" > "$VERSION_FILE"
   fi
 
   echo "release" > "$MODE_FILE"
