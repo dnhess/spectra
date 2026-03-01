@@ -918,3 +918,231 @@ Top findings:
 ```
 
 **Quick tier behavior**: Quick tier skips discussion entirely. After the opening summary, proceed directly to Phase 5 (Synthesis).
+
+## Phase 3: Discussion
+
+**Skipped entirely for Quick tier (0 rounds).** Quick tier proceeds directly from Phase 2 to Phase 5.
+
+Discussion resolves contested findings through structured debate. Fresh agents are spawned each round (not reusing opening agents). Each round assigns topics to relevant reviewers and collects their responses.
+
+### Finding Lifecycle State Machine
+
+Findings follow a formal state machine through the discussion phase:
+
+```
+open → challenged → upheld
+                  → withdrawn
+                  → modified
+```
+
+States:
+
+- **open**: Finding published in opening phase. No challenges received.
+- **challenged**: Another reviewer disputes the finding (severity, validity, or context).
+- **upheld**: Original author defends the finding successfully against the challenge.
+- **withdrawn**: Original author retracts the finding. ONLY the original author may withdraw.
+- **modified**: Original author accepts a partial challenge and updates the severity or recommendation. ONLY the original author may modify.
+
+Ownership rules:
+
+- Any reviewer may **challenge** or **uphold** any finding.
+- Only the **original author** may **withdraw** or **modify** their own findings. Third parties may only challenge.
+
+Each challenge is resolved independently. One consolidated response per round per finding (an agent does not submit multiple responses for the same finding in the same round).
+
+### Maximum Discussion Rounds
+
+| Tier | Rounds |
+|---|---|
+| **Quick** | 0 (phase skipped) |
+| **Standard** | 1 |
+| **Deep** | 2 |
+
+### Discussion Agent Prompt Template
+
+Fresh agents per round (NOT reusing opening agents).
+
+**Agent configuration:**
+
+- `subagent_type`: `"general-purpose"`
+- `mode`: `"bypassPermissions"`
+- `model`: `"opus"`
+- `max_turns`: 25
+- `run_in_background`: true
+
+**Discussion agents do NOT have WebSearch.** Debate is based on evidence already gathered during reconnaissance and the opening round.
+
+Full prompt template:
+
+```
+{persona file contents from ~/.claude/skills/code-review/personas/{reviewer-name}.md}
+
+## Discussion Context
+You are participating in round {n} of a code review discussion.
+
+### Topics assigned to you:
+{topics with their current state and the findings they reference}
+
+### Findings under discussion:
+{relevant findings from opening round}
+
+### Positions from other reviewers (previous rounds):
+{relevant positions from prior rounds if any}
+
+## Your Task
+Respond to each assigned topic with your position on the findings.
+
+Write your response as a JSON file to:
+  `{session_directory}/discussion/round-{n}/{your-agent-name}.json`
+
+Schema:
+{
+  "agent": "{your-agent-name}",
+  "responses": [
+    {
+      "topic_id": "T001",
+      "finding_id": "finding-uuid",
+      "type": "finding_challenged | finding_upheld | finding_withdrawn | finding_modified",
+      "argument": "Your substantive argument with evidence",
+      "new_severity": "only if type is finding_modified",
+      "round": {n}
+    }
+  ]
+}
+
+## Rules
+- Write ONLY to the path above — do not create any other files
+- Use python3 for JSON serialization
+- You may ONLY withdraw or modify findings you originally authored
+- You may challenge or uphold any finding
+- Base your arguments on the code, context bundle, and research brief — not speculation
+- After writing your file, you are done
+```
+
+### Polling
+
+Poll for discussion agent output files:
+
+- **Pattern**: `{session_directory}/discussion/round-{n}/*.json`
+- **Method**: Glob
+- **Interval**: ~10 seconds
+- **Timeout**: 90 seconds per round
+
+On timeout, write an `agent_complete` event with `status: "timeout"` for the missing agent. Continue processing with whatever responses arrived.
+
+### Between-Round User Controls
+
+After each round completes, present the round summary to the user:
+
+```
+Round {n}/{max_rounds} complete
+
+{upheld_count} upheld | {challenged_count} challenged | {withdrawn_count} withdrawn
+
+Topic summary:
+  [T001] {title} — {status}
+  [T002] {title} — {status}
+
+[Enter] Continue | [i] Dismiss finding | [w] Wrap up
+```
+
+User actions:
+
+- **Enter**: Proceed to next round. Spawn fresh discussion agents with updated topic states.
+- **i**: User dismisses a specific finding as a false positive. Moderator prompts for finding ID, then writes a `finding_withdrawn` event with reason `"user dismissed as false positive"`. The finding moves to `withdrawn` state.
+- **w**: Wrap up discussion early. Skip remaining rounds and proceed to Phase 4 (Final Positions).
+
+Input validation follows the rules defined in Phase 0 (Input Validation): case-insensitive matching, first-character shortcuts, and re-prompt on unrecognized input.
+
+### Convergence Criteria
+
+Convergence is evaluated after each round. Same priority order as deep-design:
+
+1. **User requests early termination** (`w`) — trigger: `user_abort`
+2. **Round counter reaches ceiling** (Standard: 1, Deep: 2) — trigger: `round_limit`
+3. **All topics resolved or deferred** — trigger: `all_topics_resolved`
+4. **All active agents send `pass` on all open topics in the same round** — trigger: `all_pass`
+
+When multiple triggers fire simultaneously, use the highest-priority trigger (lowest number in the list above).
+
+On convergence, write a `phase_transition` event with the trigger reason and proceed to Phase 4 (Final Positions).
+
+### Deadlock Detection
+
+Deadlock is evaluated after each round, before convergence checks.
+
+**Per-finding deadlock**: A finding is deadlocked when it has accumulated 2 or more challenge-upheld cycles (the same finding is challenged, upheld, then challenged again and upheld again).
+
+**Session-level circuit breaker**: If 30% or more of open findings are deadlocked, trigger the composition gate (user approval required before invoking skill composition).
+
+Algorithm:
+
+```
+for each finding f:
+    if count(challenge_upheld_cycles on f) >= 2:
+        mark f as deadlocked
+
+deadlock_ratio = deadlocked_findings / open_findings
+if deadlock_ratio >= 0.30:
+    trigger composition gate (user approval required)
+else:
+    offer composition only for individually deadlocked findings
+```
+
+Maximum 1 composition per session. See `~/.claude/skills/shared/composition.md` for the composition protocol.
+
+### Escalation Protocol
+
+When deadlock is detected on a finding, escalate to the user for resolution:
+
+1. Present both positions to the user:
+
+```
+--- Escalation: {finding title} ---
+
+{Reviewer A}: "{position}"
+{Reviewer B}: "{position}"
+
+What should we do?
+[1] Accept finding as-is
+[2] Dismiss finding
+[3] Modify severity
+[f] Free-form resolution
+```
+
+2. User decides:
+   - **1 (Accept)**: Finding is upheld at current severity. Write `escalation_resolved` event with the user's decision.
+   - **2 (Dismiss)**: Finding is withdrawn. Write `finding_withdrawn` event with reason `"user dismissed via escalation"` and `escalation_resolved` event.
+   - **3 (Modify)**: Moderator prompts for new severity. Write `finding_modified` event with the new severity and `escalation_resolved` event.
+   - **f (Free-form)**: User provides a free-text resolution. Write `escalation_resolved` event with the user's text as the decision.
+
+3. Moderator writes `escalation_resolved` event (see `code-review/event-schemas.md` for schema).
+
+### Post-Phase Processing
+
+After each discussion round completes:
+
+1. **Read** all discussion files from `discussion/round-{n}/`.
+2. **Update finding states** based on responses:
+   - `finding_challenged` responses move a finding from `open` or `upheld` to `challenged`.
+   - `finding_upheld` responses move a finding from `challenged` to `upheld`.
+   - `finding_withdrawn` responses move a finding to `withdrawn` (terminal state).
+   - `finding_modified` responses move a finding to `modified` (terminal state) with updated severity.
+3. **Write events** to the JSONL log:
+   - `finding_challenged` events for each challenge.
+   - `finding_upheld` events for each upheld response.
+   - `finding_withdrawn` events for each withdrawal.
+   - `finding_modified` events for each modification.
+   - `agent_complete` events for each discussion agent.
+4. **Write `topic_resolved` events** for topics where all associated findings have reached terminal state (withdrawn, modified, or upheld with no further challenges).
+5. **Post-phase directory audit** on `discussion/round-{n}/`. Any unexpected files (not matching the expected `{reviewer-name}.json` pattern) trigger a `security_violation` event. See `~/.claude/skills/shared/security.md` for the audit protocol.
+6. **Write `phase_transition` event** when discussion is complete (all rounds finished or convergence reached).
+
+### Checkpoint
+
+After each discussion round, write a checkpoint to `session-state.md` using the atomic write pattern from `~/.claude/skills/shared/orchestration.md`. The checkpoint includes:
+
+- Current round number
+- Finding states (open, challenged, upheld, withdrawn, modified)
+- Topic states (open, resolved, deferred)
+- Convergence trigger (if discussion ended early)
