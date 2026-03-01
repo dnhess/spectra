@@ -20,32 +20,48 @@ else
   json_data="$(cat)"
 fi
 
-# Resolve to absolute path
-abs_path="$(cd "$(dirname "$output_path")" 2>/dev/null && pwd)/$(basename "$output_path")" \
-  || die "parent directory does not exist: $(dirname "$output_path")"
+# Resolve to absolute physical path (pwd -P resolves symlinks)
+if ! parent_dir="$(cd "$(dirname "$output_path")" 2>/dev/null && pwd -P)"; then
+  die "parent directory does not exist: $(dirname "$output_path")"
+fi
+abs_path="${parent_dir}/$(basename "$output_path")"
 
 # Path constraint: must be under allowed directories
 allowed=false
-sessions_dir="$HOME/.spectra/sessions"
-if [[ "$abs_path" == "$sessions_dir"/* ]]; then
-  allowed=true
+
+# Primary: ~/.spectra/sessions/ (resolved physically)
+if sessions_dir="$(cd "$HOME/.spectra/sessions" 2>/dev/null && pwd -P)"; then
+  if [[ "$abs_path" == "$sessions_dir"/* ]]; then
+    allowed=true
+  fi
 fi
-# Also allow SPECTRA_SESSION_DIR if set (for deep-design-sessions etc.)
-if [[ -n "${SPECTRA_SESSION_DIR:-}" ]] && [[ "$abs_path" == "${SPECTRA_SESSION_DIR}"/* ]]; then
-  allowed=true
+
+# SPECTRA_SESSION_DIR if set — must itself be under ~/.spectra/ or ~/.claude/
+if [[ -n "${SPECTRA_SESSION_DIR:-}" ]]; then
+  if resolved_session_dir="$(cd "${SPECTRA_SESSION_DIR}" 2>/dev/null && pwd -P)"; then
+    if [[ "$resolved_session_dir" == "$HOME/.spectra/"* ]] || \
+       [[ "$resolved_session_dir" == "$HOME/.claude/"* ]]; then
+      if [[ "$abs_path" == "$resolved_session_dir"/* ]]; then
+        allowed=true
+      fi
+    fi
+  fi
 fi
-# Allow ~/.claude/*-sessions/ for backward compatibility
+
+# Backward compatibility: ~/.claude/*-sessions/
 if [[ "$abs_path" == "$HOME/.claude/"*"-sessions/"* ]]; then
   allowed=true
 fi
 
-[[ "$allowed" == "true" ]] || die "path not allowed: $output_path (must be under $sessions_dir)"
+[[ "$allowed" == "true" ]] || die "path not allowed: $output_path (must be under ~/.spectra/sessions/)"
 
 # Validate JSON
-echo "$json_data" | python3 -c "import sys, json; json.load(sys.stdin)" 2>/dev/null \
+printf '%s' "$json_data" | python3 -c "import sys, json; json.load(sys.stdin)" 2>/dev/null \
   || die "invalid JSON"
 
 # Atomic write: temp file then mv
 tmp_file="${abs_path}.tmp.$$"
-echo "$json_data" > "$tmp_file"
+trap 'rm -f "$tmp_file"' EXIT INT TERM
+printf '%s\n' "$json_data" > "$tmp_file"
 mv "$tmp_file" "$abs_path"
+trap - EXIT INT TERM
