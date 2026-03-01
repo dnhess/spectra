@@ -48,7 +48,9 @@ Add these to `~/.claude/settings.json` so skill sessions run without manual appr
       "Read(~/.claude/deep-design-sessions/**)",
       "Read(~/.claude/decision-board-sessions/**)",
       "Glob(~/.claude/deep-design-sessions/**)",
-      "Glob(~/.claude/decision-board-sessions/**)"
+      "Glob(~/.claude/decision-board-sessions/**)",
+      "Write(~/.claude/.active-deep-design-session)",
+      "Write(~/.claude/.active-decision-board-session)"
     ]
   }
 }
@@ -70,6 +72,22 @@ Agents ──(Write JSON file)──► Session Directory ◄──(Glob/Read)�
 - **No coordinator agent** — the moderator drives the session directly
 
 This replaces the previous hub-and-spoke coordinator pattern, eliminating message delivery failures and coordinator stalling.
+
+## Context Persistence
+
+Sessions leave a trail for future sessions to build on:
+
+- **Checkpoints** — `session-state.md` written at each phase transition.
+  Enables recovery after Claude Code context compaction mid-session.
+- **Handoffs** — `handoff.md` written at session end with key findings,
+  unresolved items, and follow-up recommendations.
+- **Prior Context** — At session start, the moderator queries the manifest
+  for prior sessions on the same project and loads the most recent handoff.
+  Agents receive unresolved items so they don't repeat resolved findings.
+
+All persistence files use atomic writes (temp-then-rename) and content
+sanitization before injection into agent prompts.
+See `shared/orchestration.md` for the full protocol.
 
 ## Repository Structure
 
@@ -101,6 +119,11 @@ To add a new multi-agent skill:
 2. Add a `SKILL.md` that references `~/.claude/skills/shared/orchestration.md` for the blackboard protocol
 3. Add an `event-schemas.md` with domain-specific events, referencing `shared/event-schemas-base.md` for common types
 4. Add a `personas/` directory with agent persona files
-5. Add a symlink line to `install.sh`
+5. **Wire persistence** — reference the Persistence Protocol in `shared/orchestration.md`:
+   - Define your sentinel name (`.active-{skill-name}-session`)
+   - Define handoff content mapping for your domain
+   - Define which manifest field identifies repeat sessions
+   - Add checkpoint timing appropriate for your session phases
+6. Add a symlink line to `install.sh`
 
-The shared infrastructure handles: session directory management, polling protocol, JSONL event writing, synthesis pipeline, fault tolerance, and security.
+The shared infrastructure handles: session directory management, polling protocol, JSONL event writing, synthesis pipeline, fault tolerance, security, and context persistence.

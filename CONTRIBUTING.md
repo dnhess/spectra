@@ -59,8 +59,13 @@ chore: update .gitignore
 2. Add `SKILL.md` referencing `~/.claude/skills/shared/orchestration.md`
 3. Add `event-schemas.md` with domain-specific events, referencing `shared/event-schemas-base.md`
 4. Add `personas/` with agent persona files
-5. Add a symlink line to `install.sh`
-6. Update `README.md` to list the new skill
+5. **Wire persistence** — reference the Persistence Protocol in `shared/orchestration.md`:
+   - Define your sentinel name (`.active-{skill-name}-session`)
+   - Define handoff content mapping for your domain
+   - Define which manifest field identifies repeat sessions
+   - Add checkpoint timing appropriate for your session phases
+6. Add a symlink line to `install.sh`
+7. Update `README.md` to list the new skill
 
 ## Code of Conduct
 

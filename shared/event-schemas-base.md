@@ -205,6 +205,52 @@ Written by the parent skill's moderator after the child skill finishes. Pairs wi
 | `outcome_summary` | String | Human-readable summary of the child's result |
 | `parent_event_id` | String | `event_id` of the corresponding `composition_invoked` event |
 
+### `checkpoint_written`
+
+Records that a state checkpoint was written at a phase transition. See `shared/orchestration.md` for the checkpoint protocol.
+
+```json
+{
+  "event_id": "uuid",
+  "session_id": "session-id",
+  "sequence_number": 8,
+  "schema_version": "1.0.0",
+  "type": "checkpoint_written",
+  "timestamp": "ISO-8601",
+  "phase": "discussion_round_1",
+  "checkpoint_file": "session-state.md"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `phase` | String | The phase that just completed |
+| `checkpoint_file` | String | Filename of the checkpoint (always `session-state.md`) |
+
+### `handoff_written`
+
+Records that a session handoff file was generated. Counts are derived from `synthesis-brief.json` fields, not from parsing handoff markdown.
+
+```json
+{
+  "event_id": "uuid",
+  "session_id": "session-id",
+  "sequence_number": 19,
+  "schema_version": "1.0.0",
+  "type": "handoff_written",
+  "timestamp": "ISO-8601",
+  "handoff_file": "handoff.md",
+  "unresolved_items": 1,
+  "followup_recommendations": 4
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `handoff_file` | String | Filename of the handoff (always `handoff.md`) |
+| `unresolved_items` | Integer | Count of unresolved/deferred items from `synthesis-brief.json` |
+| `followup_recommendations` | Integer | Count of follow-up recommendations |
+
 ## Cross-Session Manifest Base Schema
 
 Every manifest entry MUST include these common fields. Domain-specific fields are defined in each skill's `event-schemas.md`.
@@ -219,7 +265,9 @@ Every manifest entry MUST include these common fields. Domain-specific fields ar
   "specialist_count": 1,
   "quality": "Full | Partial | Minimal",
   "duration_seconds": 480,
-  "feedback_rating": "very_helpful | somewhat_helpful | not_helpful | null"
+  "feedback_rating": "very_helpful | somewhat_helpful | not_helpful | null",
+  "has_handoff": false,
+  "session_dirname": null
 }
 ```
 
@@ -234,6 +282,8 @@ Every manifest entry MUST include these common fields. Domain-specific fields ar
 | `quality` | String | Session quality (`Full`, `Partial`, or `Minimal`) |
 | `duration_seconds` | Integer or null | Wall-clock duration of the session |
 | `feedback_rating` | String or null | Post-session user rating. Nullable (populated after user provides feedback) |
+| `has_handoff` | Boolean | Whether `handoff.md` was written for this session. Default `false` for pre-existing entries missing this field |
+| `session_dirname` | String or null | Leaf directory name of the session directory. Resolved at read time via `~/.claude/{skill}-sessions/{session_dirname}`. `null` for pre-existing entries |
 
 ## JSONL Write Semantics
 

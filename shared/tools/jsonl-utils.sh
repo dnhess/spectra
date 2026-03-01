@@ -19,6 +19,7 @@ Commands:
   validate <file>               Validate every line is valid JSON; exit 1 on failure
   sequence-check <file>         Verify sequence_numbers are monotonically increasing with no gaps
   has-sentinel <file>           Exit 0 if session_complete event exists, exit 1 otherwise
+  query-project <file> <project>  Print all entries matching the given project name
 EOF
   exit 1
 }
@@ -124,6 +125,19 @@ for line in open(sys.argv[1]):
         sys.exit(0)
 sys.exit(1)
 " "$JSONL_FILE"
+    ;;
+
+  query-project)
+    PROJECT="${3:?Missing project argument}"
+    python3 -c "
+import json, sys
+for line in open(sys.argv[1]):
+    line = line.strip()
+    if not line: continue
+    evt = json.loads(line)
+    if evt.get('project') == sys.argv[2]:
+        print(json.dumps(evt))
+" "$JSONL_FILE" "$PROJECT"
     ;;
 
   *)

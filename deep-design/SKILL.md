@@ -13,6 +13,16 @@ Reviews operate in one of three cost tiers (Quick, Standard, Deep) auto-selected
 
 You (the main Claude instance) act as the **moderator** throughout. You drive every phase directly — there is no coordinator agent.
 
+### Compaction Recovery
+
+If your context seems incomplete (you don't remember the session setup, agents, or current phase), you may have experienced context compaction.
+
+1. Check for `~/.claude/.active-deep-design-session` to find the session directory
+2. Read `session-state.md` from that directory
+3. Validate the checkpoint (verify section headers and session ID match)
+4. If checkpoint is invalid, replay `review-events.jsonl` to reconstruct state
+5. Resume from the indicated phase
+
 ### Success Metrics
 
 Track these outcome-based metrics in the cross-session manifest to measure whether reviews deliver value:
@@ -206,6 +216,10 @@ Continue anyway? [Y/n]
 
 Skip this if the conversation is fresh (no prior messages).
 
+### Prior Session Context
+
+Follow the Persistence Protocol (`~/.claude/skills/shared/orchestration.md`) to load prior session context. Query the manifest for prior reviews on the same project. Check the `document` field for prior reviews of the same document — this enables the follow-up prompt: "Last review found N critical findings. How many did you act on?" Surface prior context to the user at the confirmation gate.
+
 ## Phase 1: Project Context, Classification & Tier Selection
 
 ### Gather Project Context
@@ -319,6 +333,10 @@ Create a namespaced session directory with subdirectories for agent output:
   revised-document.md    # The revised document (or checklist for Quick tier)
 ```
 
+### Write Active Session Sentinel
+
+Write `.active-deep-design-session` sentinel per Persistence Protocol (`~/.claude/skills/shared/orchestration.md` > State Checkpoints > Active Session Sentinel).
+
 ### Lock File
 
 Create `session.lock` with tier-appropriate TTL:
@@ -377,9 +395,10 @@ The moderator drives this phase directly:
 2. **Poll `opening/*.json` using Glob** every ~10 seconds
 3. **When all files arrive** (or timeout at 120s): read each file, write `review` and `agent_complete` events to the JSONL log
 4. **Post-phase directory audit**: Snapshot the session directory before and after the phase. Any unexpected files are flagged as a `security_violation` event.
-5. **Analyze reviews** for discussion topics — extract disagreements and major concerns into named topics
-6. **Write topics** to `topics.json`
-7. **Present summary to user** with interactive options
+5. **Write checkpoint**: Write `session-state.md` per Persistence Protocol. Log `checkpoint_written` event.
+6. **Analyze reviews** for discussion topics — extract disagreements and major concerns into named topics
+7. **Write topics** to `topics.json`
+8. **Present summary to user** with interactive options
 
 ### Opening Round Agent Prompt Template
 
@@ -389,6 +408,10 @@ The moderator drives this phase directly:
 ## Project Context
 {CLAUDE.md conventions}
 {Detected stack}
+
+{If prior session context is available — see Persistence Protocol:}
+## Prior Session Context
+{Prior session context with security framing — see shared/orchestration.md > Prior Session Context > Agent Prompt Injection}
 
 ## Your Task
 Review the document from your perspective.
@@ -466,6 +489,8 @@ The moderator drives discussion directly using fresh agents per round:
 5. **Read results**, write `rebuttal`/`pass` events to the JSONL log
 6. **Resolve topics**: check convergence, write `topic_resolved` events
 7. **Present round summary to user**
+
+**Checkpoint**: After processing each discussion round, write `session-state.md` per Persistence Protocol. Log `checkpoint_written` event. Standard and Deep tiers only.
 
 ### Discussion Agent Prompt Template
 
@@ -667,6 +692,8 @@ When multiple triggers fire in the same evaluation cycle, use the highest-priori
 
 Once discussion concludes:
 
+0. **Write checkpoint**: Write `session-state.md` per Persistence Protocol before spawning final-position agents. Log `checkpoint_written` event. Standard and Deep tiers only.
+
 1. **Spawn final-position agents** in parallel, each instructed to write to `final-positions/{agent-name}.json`. Poll for files, read results, write `final_position` events.
 
 2. **Moderator produces `synthesis-brief.json`** directly — a structured summary containing all review observations grouped by severity, discussion resolutions per topic, final positions per agent, and session metrics:
@@ -736,7 +763,7 @@ Once discussion concludes:
    Both agents run in parallel.
 
 6. **Post-synthesis directory audit**: After both synthesis agents complete, the moderator validates the session directory against the file-write allowlist:
-   - **Allowed files**: `review-events.jsonl`, `synthesis-brief.json`, `topics.json`, `session.lock`, `revised-document.md`, `discussion-log.md`, `composition-request.json`
+   - **Allowed files**: `review-events.jsonl`, `synthesis-brief.json`, `topics.json`, `session.lock`, `revised-document.md`, `discussion-log.md`, `composition-request.json`, `session-state.md`, `handoff.md`
    - **Allowed directories and contents**: `opening/*.json`, `discussion/round-*/*.json`, `final-positions/*.json`
    - Any unexpected file triggers a `security_violation` event and user warning
    - Offending files are NOT included in the final output presentation
@@ -878,7 +905,9 @@ Team teardown (TeamDelete) already happened in Phase 5 step 4. This phase handle
 1. **This phase MUST run even on errors** — wrap in try/finally equivalent
 2. Synthesis agents (standalone, no team context) terminate automatically when done
 3. Remove the `session.lock` file
-4. Write an entry to the cross-session manifest (see below)
+4. **Generate handoff**: Write `handoff.md` per Persistence Protocol (`~/.claude/skills/shared/orchestration.md` > Session Handoff). Content mapping: Key Findings from critical/major observations in `synthesis-brief.json`, Decisions Made from topic resolutions, Unresolved from deferred topics. Log `handoff_written` event.
+5. Write an entry to the cross-session manifest (see below). Set `has_handoff: true` and `session_dirname` to the leaf directory name.
+6. **Delete sentinel**: Remove `~/.claude/.active-deep-design-session`.
 
 ### Cross-Session Manifest
 

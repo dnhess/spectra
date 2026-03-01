@@ -30,6 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `composition_id` and `parent_session_id` fields on decision-board `session_start` events
 - `parent_composition_id` and `parent_session_id` fields on decision-board manifest entries
 - Composition input handling in decision-board Phase 1 (reads `composition-request.json` to bootstrap sessions)
+- **Compaction-resilient state checkpoints** (`shared/orchestration.md`) — `session-state.md` written at phase transitions, enabling moderator recovery after context compaction
+- **Session handoff for cross-session continuity** (`shared/orchestration.md`) — `handoff.md` written in Phase 6 with key findings, unresolved items, and follow-up recommendations for future sessions
+- **Prior session context injection with per-project task summary** (`shared/orchestration.md`) — loads most recent handoff at session start, surfaces history and unresolved items to agents, capped at 5 most recent sessions per project
+- `checkpoint_written` and `handoff_written` event types in `shared/event-schemas-base.md`
+- `has_handoff` and `session_dirname` fields on cross-session manifest base schema — `session_dirname` stores leaf directory name only, resolved at read time (nullable for backward compatibility)
+- `query-project` command in `jsonl-utils.sh` for filtering manifest entries by project name
+- **Persistence Protocol — Phase Integration** (`shared/orchestration.md`) — shared phase integration instructions for all skills, defining when and how to wire checkpoints, handoffs, and prior context loading at standard phase boundaries
+- **Content sanitization (Layer 3)** for handoff injection into agent prompts (`shared/security.md`) — scans for prompt injection patterns, two-layer framing with meta-instruction and randomized delimiters
+- **Structured degradation ladder** for handoff validation failures (`shared/security.md`) — five failure modes with specific actions and event logging
+- `.active-{skill}-session` sentinel file for compaction recovery discovery — JSON file written at session start, deleted at session end, enables session directory rediscovery after context compaction
+- Atomic write-to-temp-then-rename for checkpoint and handoff files — prevents corrupted files from interrupted writes
+- Checkpoint validation with event log replay fallback — verifies section headers and session ID, falls back to JSONL replay on failure
+- Tiered retention model documentation — manifest indefinite, handoffs 180 days, raw session data 30 days (implementation deferred)
+- Persistence wiring in both `deep-design/SKILL.md` and `decision-board/SKILL.md` — lightweight references to shared Persistence Protocol with skill-specific overrides
+- Context Persistence section in `README.md` and persistence step in `CONTRIBUTING.md` skill creation guide
 
 ## [0.1.0] - 2026-02-28
 
