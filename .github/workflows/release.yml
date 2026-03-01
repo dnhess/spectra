@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: "**/*.md"
+      - uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: "."
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --save-dev @commitlint/cli @commitlint/config-conventional
+      - run: npx commitlint --from HEAD~1
+
+  release:
+    name: Build & Release
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build tarball
+        run: |
+          tarball_name="spectra-${GITHUB_REF_NAME}.tar.gz"
+          tar -czf "$tarball_name" \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='docs' \
+            --exclude='.husky' \
+            --exclude='.claude' \
+            --exclude='package.json' \
+            --exclude='package-lock.json' \
+            --exclude='.commitlintrc.yml' \
+            --exclude='.markdownlint.yml' \
+            --exclude='.markdownlintignore' \
+            --exclude='.gitignore' \
+            --exclude='CONTRIBUTING.md' \
+            --exclude='CODE_OF_CONDUCT.md' \
+            --exclude='CODEOWNERS' \
+            --exclude='LICENSE' \
+            bin/ \
+            shared/ \
+            deep-design/ \
+            decision-board/ \
+            code-review/ \
+            CHANGELOG.md \
+            README.md
+          echo "tarball_name=$tarball_name" >> "$GITHUB_ENV"
+
+      - name: Validate tarball
+        run: |
+          mkdir -p /tmp/validate
+          tar -xzf "$tarball_name" -C /tmp/validate
+          # Verify expected structure exists
+          test -f /tmp/validate/bin/spectra
+          test -f /tmp/validate/bin/json-write.sh
+          test -d /tmp/validate/shared
+          test -d /tmp/validate/deep-design
+          test -d /tmp/validate/decision-board
+          test -d /tmp/validate/code-review
+          echo "Tarball structure validated"
+
+      - name: Generate checksums
+        run: sha256sum "$tarball_name" > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ${{ env.tarball_name }}
+            checksums.txt
