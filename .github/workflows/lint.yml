@@ -39,6 +39,23 @@ jobs:
       - run: npm install --save-dev @commitlint/cli @commitlint/config-conventional
       - run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
+  path-lint:
+    name: Session Path Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for hardcoded ~/.claude/ session paths
+        run: |
+          if grep -rn '~/.claude/.*-sessions/' \
+            --include='*.md' \
+            --exclude-dir='docs' \
+            --exclude='CHANGELOG.md' \
+            shared/ deep-design/ decision-board/ code-review/ README.md CONTRIBUTING.md CLAUDE.md; then
+            echo "::error::Found hardcoded ~/.claude/ session paths. Use ~/.spectra/sessions/{skill}/ instead."
+            exit 1
+          fi
+          echo "No hardcoded session paths found"
+
   changelog:
     name: Changelog Updated
     runs-on: ubuntu-latest
