@@ -1,0 +1,26 @@
+name: Skill Request
+description: Suggest a new deliberation skill
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Skill Description
+      description: What should this skill do? What kind of deliberation does it enable?
+      placeholder: "e.g., A skill that stress-tests API designs by simulating consumer/provider disagreements"
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: When would you reach for this skill? What triggers it?
+      placeholder: "e.g., When designing a new public API and wanting to catch usability issues before implementation"
+    validations:
+      required: true
+  - type: textarea
+    id: personas
+    attributes:
+      label: Suggested Personas
+      description: What perspectives should debate or review? (optional)
+      placeholder: "e.g., API consumer, API provider, security reviewer, DX engineer"

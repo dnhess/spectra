@@ -1,0 +1,14 @@
+default: true
+
+# Allow long lines — skill files have embedded JSON schemas and templates
+MD013: false
+
+# Allow inline HTML (used sparingly in skill files)
+MD033: false
+
+# Allow duplicate headings in different sections
+MD024:
+  siblings_only: true
+
+# Allow trailing punctuation in headings (e.g., "Phase 3: Opening Round")
+MD026: false

@@ -1,0 +1,35 @@
+name: Bug Report
+description: Report a problem with a skill or the install script
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: skill
+    attributes:
+      label: Affected Skill
+      options:
+        - deep-design
+        - decision-board
+        - install.sh
+        - shared infrastructure
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem clearly.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: What should have happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any relevant logs, screenshots, or environment details.

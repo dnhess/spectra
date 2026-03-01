@@ -1,5 +1,8 @@
 # Spectra
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Lint](https://github.com/dnhess/spectra/actions/workflows/lint.yml/badge.svg)](https://github.com/dnhess/spectra/actions/workflows/lint.yml)
+
 Multi-agent deliberation skills for Claude Code. Orchestrates structured review and debate sessions using a **blackboard architecture** — every perspective refracted, every angle examined.
 
 ## Available Skills
