@@ -41,3 +41,23 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 - Never add coordinator, heartbeat, or cost tracking patterns — these were intentionally removed.
 - Persona files are independent of the orchestration layer. Edit freely without touching SKILL.md.
 - `install.sh` creates symlinks into `~/.claude/skills/`. Update it when adding new skills.
+
+## Enforced Standards
+
+These are not suggestions — CI will block merge if violated:
+
+- **Conventional commits required.** Every commit must follow `type: description` format. Valid types: `feat`, `fix`, `docs`, `chore`, `refactor`, `style`, `ci`, `test`. Enforced by commitlint in CI and pre-commit hook.
+- **Markdown lint must pass.** Config in `.markdownlint.yml`. Run locally: `npm run lint`
+- **ShellCheck must pass** on all `.sh` files.
+- **CHANGELOG.md must be updated** for any PR that changes skills or shared infrastructure. Add entries under `[Unreleased]`.
+- **CODEOWNERS review required** for changes to `shared/`, `install.sh`, `SKILL.md`, or `event-schemas.md`.
+- **All PRs require approval** before merge. No direct pushes to main.
+
+### Local setup for hooks
+
+```bash
+npm install    # installs husky, commitlint, markdownlint-cli2
+npm run prepare # sets up git hooks
+```
+
+After this, commits are validated locally before push.

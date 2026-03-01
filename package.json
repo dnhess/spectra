@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "description": "Spectra — multi-agent deliberation skills for Claude Code",
+  "scripts": {
+    "prepare": "husky",
+    "lint": "markdownlint-cli2 '**/*.md'",
+    "lint:commits": "commitlint --from HEAD~1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "husky": "^9.0.0",
+    "markdownlint-cli2": "^0.17.0"
+  }
+}

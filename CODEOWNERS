@@ -1,0 +1,13 @@
+# Shared infrastructure — changes here affect all skills
+/shared/ @dnhess
+
+# Install script — affects user setup
+/install.sh @dnhess
+
+# Skill orchestration specs — major files, require review
+/deep-design/SKILL.md @dnhess
+/decision-board/SKILL.md @dnhess
+
+# Event schemas — must stay consistent with shared base
+/deep-design/event-schemas.md @dnhess
+/decision-board/event-schemas.md @dnhess

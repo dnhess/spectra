@@ -5,13 +5,19 @@ Thanks for your interest in contributing. This guide covers how to add skills, m
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork and install locally:
+2. Clone your fork and set up local tooling:
+
    ```bash
    git clone https://github.com/YOUR_USERNAME/spectra.git
    cd spectra
-   ./install.sh
+   npm install       # installs commitlint, markdownlint, husky
+   npm run prepare   # activates git hooks
+   ./install.sh      # symlinks skills into ~/.claude/skills/
    ```
+
 3. Create a branch for your changes: `git checkout -b feat/my-change`
+
+This installs pre-commit hooks that validate your commits locally before you push. If you skip this step, CI will still catch violations on the PR.
 
 ## Skill File Format
 
