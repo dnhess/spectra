@@ -1,0 +1,7 @@
+{
+  "required_fields": {
+    "agent": "string",
+    "responses": "array"
+  },
+  "description": "Deep-design discussion round rebuttal output"
+}

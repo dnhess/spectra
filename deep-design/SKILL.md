@@ -393,7 +393,7 @@ The moderator drives this phase directly:
 
 1. **Spawn all review agents in parallel**, each instructed to write their review to `opening/{agent-name}.json`
 2. **Poll `opening/*.json` using Glob** every ~10 seconds
-3. **When all files arrive** (or timeout at 120s): read each file, write `review` and `agent_complete` events to the JSONL log
+3. **When all files arrive** (or timeout at 120s): read each file. Before writing events, validate each file through the unified validation pipeline: `bash ~/.claude/skills/shared/tools/validate-output.sh <file> opening deep-design --warn-only`. In Phase 1 (warn-only mode), log any validation warnings but continue processing. See `shared/orchestration.md` > Output Validation for failure handling.
 4. **Post-phase directory audit**: Snapshot the session directory before and after the phase. Any unexpected files are flagged as a `security_violation` event.
 5. **Write checkpoint**: Write `session-state.md` per Persistence Protocol. Log `checkpoint_written` event.
 6. **Analyze reviews** for discussion topics — extract disagreements and major concerns into named topics
@@ -486,7 +486,7 @@ The moderator drives discussion directly using fresh agents per round:
    - Relevant positions from previous rounds (extracted from prior round files)
    - Instruction to write `discussion/round-{n}/{agent-name}.json`
 4. **Poll for files** using Glob every ~10 seconds
-5. **Read results**, write `rebuttal`/`pass` events to the JSONL log
+5. **Read results**. Before writing events, validate each file: `bash ~/.claude/skills/shared/tools/validate-output.sh <file> discussion deep-design --warn-only`. Log validation warnings but continue processing in warn-only mode. Write `rebuttal`/`pass` events to the JSONL log.
 6. **Resolve topics**: check convergence, write `topic_resolved` events
 7. **Present round summary to user**
 
@@ -694,7 +694,7 @@ Once discussion concludes:
 
 0. **Write checkpoint**: Write `session-state.md` per Persistence Protocol before spawning final-position agents. Log `checkpoint_written` event. Standard and Deep tiers only.
 
-1. **Spawn final-position agents** in parallel, each instructed to write to `final-positions/{agent-name}.json`. Poll for files, read results, write `final_position` events.
+1. **Spawn final-position agents** in parallel, each instructed to write to `final-positions/{agent-name}.json`. Poll for files, read results. Before writing `final_position` events, validate each file: `bash ~/.claude/skills/shared/tools/validate-output.sh <file> final-positions deep-design --warn-only`. Log validation warnings but continue processing in warn-only mode.
 
 2. **Moderator produces `synthesis-brief.json`** directly — a structured summary containing all review observations grouped by severity, discussion resolutions per topic, final positions per agent, and session metrics:
 
@@ -997,19 +997,18 @@ Approve this specialist? [Y/n]
 
 ## Fault Tolerance
 
-### Agent Failures
-- **Timeout**: File-polling timeouts per phase (see `~/.claude/skills/shared/orchestration.md` for polling protocol). If an agent file is missing at timeout, the moderator writes an `agent_complete` event with status `timeout` and continues if quorum is met.
-- **Below quorum** (< 2 active agents): Halt review, inform user, save partial results
-- **Graceful degradation**: Always produce output. Label with: `Full` (all agents) / `Partial` (some lost) / `Minimal` (at quorum). Quality computed per formula in `event-schemas.md`.
+All failure modes, severity tiers (P0/P1/P2), detection methods, and recovery procedures are defined in `~/.claude/skills/shared/orchestration.md` under "Failure Modes". This section covers deep-design-specific overrides only.
 
-### Quality Computation
+### Quality Computation (deep-design)
 
 `session_end.quality` is computed deterministically:
+
 - **Full**: All selected agents completed their reviews AND all topics resolved or deferred
 - **Partial**: At least `ceil(n/2)` agents completed AND at least 1 topic resolved
 - **Minimal**: Above quorum (2 agents) but below Partial thresholds
 
 ### Moderator Recovery
+
 - **Stale sessions**: Detect via lock file TTL, clean up on next invocation
 - **Event log**: `review-events.jsonl` is append-only and serves as a durable event log
 - **try/finally cleanup**: TeamDelete always runs, even on errors

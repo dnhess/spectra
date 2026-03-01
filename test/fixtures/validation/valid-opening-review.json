@@ -1,0 +1,8 @@
+{
+  "agent": "system-architect",
+  "observations": [
+    {"text": "API lacks pagination", "severity": "major", "id": "obs-001"}
+  ],
+  "recommendations": ["Add cursor-based pagination to all list endpoints"],
+  "specialist_recommendation": null
+}

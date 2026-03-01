@@ -1,0 +1,10 @@
+{
+  "required_fields": {
+    "agent": "string",
+    "recommendation": "string",
+    "confidence": "number",
+    "conditions": "array",
+    "option_rankings": "array"
+  },
+  "description": "Deep-design final position review output"
+}

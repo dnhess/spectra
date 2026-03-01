@@ -1,0 +1,11 @@
+{
+  "agent": "cost-analyst",
+  "preferred_option": "Option A",
+  "confidence": 0.85,
+  "conditions": ["Budget must not exceed $50k"],
+  "reasoning": "Option A has the best cost-to-value ratio",
+  "options_assessed": [
+    {"option": "Option A", "assessment": "Best value"},
+    {"option": "Option B", "assessment": "Too expensive"}
+  ]
+}

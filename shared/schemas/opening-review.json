@@ -1,0 +1,9 @@
+{
+  "required_fields": {
+    "agent": "string",
+    "observations": "array",
+    "recommendations": "array",
+    "specialist_recommendation": "nullable"
+  },
+  "description": "Deep-design opening round review output"
+}
