@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **code-review** skill (v1.0) — multi-perspective code review with 6 core + 6 specialist personas
+- Reconnaissance phase with scout + research agents for codebase context and current best practices
+- Web Search Security model (Layer 4) in `shared/security.md` — provenance tagging, domain scoping, content isolation, query constraints, two-pass research
+- `recon/` directory added to Layer 2 security audit allowlist in `shared/security.md`
+- Finding lifecycle state machine with UUID-based IDs (`finding-{uuid4}`) and formal state transitions (open/challenged/upheld/withdrawn/modified)
+- Deadlock detection algorithm with per-finding count-based detection and session-level circuit breaker (30% threshold)
+- Phase boundary validation at each phase transition in code-review skill
+- `code-review` symlink added to `install.sh`
 - CEO/Strategist "Hiring Authority" for on-the-fly persona creation when domain gaps exist
 - **deep-design** core personas: Technical Writer, End User Advocate
 - **deep-design** specialists: Performance/SRE Engineer, Legal/Compliance Generalist
