@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Simplified all persona files to ~10-15 lines (identity + focus + voice format)
+- Removed Red Flags, Natural Collaborators, and boilerplate from all personas
+- Updated custom specialist template in deep-design SKILL.md to match simplified format
+
+### Added
+
+- CEO/Strategist "Hiring Authority" for on-the-fly persona creation when domain gaps exist
+- **deep-design** core personas: Technical Writer, End User Advocate
+- **deep-design** specialists: Performance/SRE Engineer, Legal/Compliance Generalist
+- **decision-board** core persona: End User Advocate
+- **decision-board** specialists: Performance/SRE, Legal/Compliance, Technical Writer
+
 ## [0.1.0] - 2026-02-28
 
 ### Added
