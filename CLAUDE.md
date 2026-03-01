@@ -6,7 +6,8 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 
 - `shared/` — Reusable orchestration infrastructure (not a skill itself)
   - `orchestration.md` — Blackboard protocol, polling, session management
-  - `event-schemas-base.md` — Common event types (session_start, phase_transition, agent_complete, session_complete, session_end, feedback, security_violation)
+  - `event-schemas-base.md` — Common event types (session_start, phase_transition, agent_complete, session_complete, session_end, feedback, security_violation, composition_invoked, composition_completed)
+  - `composition.md` — Skill composition protocol for inter-skill invocation mid-session
   - `security.md` — 3-layer defense model, content isolation, directory audits
   - `tools/jsonl-utils.sh` — JSONL query utility (single copy, used by all skills)
 - `deep-design/` — Multi-perspective design review skill (v4.0)

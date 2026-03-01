@@ -1,1 +1,1 @@
-npx --no -- markdownlint-cli2 "**/*.md"
+npm run lint

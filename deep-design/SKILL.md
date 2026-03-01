@@ -90,7 +90,12 @@ digraph deep_design {
     "Convergence reached?" -> "Final Positions: spawn agents, poll" [label="yes"];
     "Convergence reached?" -> "Escalate to user" [label="deadlock"];
     "Convergence reached?" -> "Round limit hit?" [label="no"];
-    "Escalate to user" -> "Convergence reached?";
+    "Escalate to user" -> "User resolves or deliberates?" [label=""];
+    "User resolves or deliberates?" [shape=diamond];
+    "User resolves or deliberates?" -> "Convergence reached?" [label="resolve/skip/defer"];
+    "User resolves or deliberates?" -> "Deliberate with decision-board" [label="deliberate"];
+    "Deliberate with decision-board" [shape=box];
+    "Deliberate with decision-board" -> "Convergence reached?";
     "Round limit hit?" -> "Final Positions: spawn agents, poll" [label="yes"];
     "Round limit hit?" -> "Discussion: fresh agents per round, poll" [label="no"];
     "Final Positions: spawn agents, poll" -> "Moderator produces synthesis-brief.json";
@@ -532,7 +537,9 @@ Show progress (append-only):
 ### Escalation Protocol
 
 When the moderator detects a deadlock on a topic:
+
 1. Present both positions (concise) to the user:
+
 ```
 --- Escalation: T002 — {title} ---
 
@@ -543,12 +550,82 @@ What should we do?
 [1] {option 1}
 [2] {option 2}
 [3] Defer to v2
+[d] Deliberate with decision-board (runs a structured debate)
 [s] Skip — let agents continue discussing
 [f] Free-form — type your own resolution
 ```
+
 2. If user selects `[f]`, prompt for free-form text input
-3. User decides
-4. Moderator writes `escalation_resolved` event and includes the decision in the next round's context
+3. If user selects `[d]`, invoke the composition protocol (see Inline Deliberation below)
+4. For all other selections, user decides directly
+5. Moderator writes `escalation_resolved` event and includes the decision in the next round's context
+
+### Inline Deliberation via Composition
+
+When the user selects `[d]` at the escalation prompt, the moderator invokes decision-board through the skill composition protocol (see `~/.claude/skills/shared/composition.md`).
+
+**Eligibility check** — the `[d]` option is only shown when ALL of:
+
+- Current tier is Standard or Deep (Quick tier cannot compose)
+- No prior composition in this session (`compositions_invoked == 0`)
+- decision-board is installed (`~/.claude/skills/decision-board/` exists)
+
+If any check fails, the `[d]` option is omitted from the escalation prompt.
+
+**Composition flow** (follows the 7-step lifecycle from `shared/composition.md`):
+
+1. **Write `composition-request.json`** to the session directory with:
+   - `parent.skill`: `"deep-design"`
+   - `parent.current_phase`: `"discussion"`
+   - `parent.trigger_reason`: deadlock description
+   - `child.skill`: `"decision-board"`
+   - `child.tier_override`: one tier below current (Deep → `"standard"`, Standard → `"quick"`)
+   - `child.skip_confirmation`: `true`
+   - `child.skip_feedback`: `true`
+   - `request.question`: the deadlocked topic as a decision question
+   - `request.options`: the competing positions as options
+   - `request.positions`: agent name → position mapping
+   - `request.context_summary`: brief context from the review session
+   - `request.source_file_paths`: the document(s) under review
+
+2. **Write `composition_invoked` event** to the JSONL event log
+
+3. **TeamDelete** — shut down the review team. Session directory and all files are preserved.
+
+4. **Invoke decision-board** — the moderator runs a complete decision-board session:
+   - decision-board reads `composition-request.json` for its input
+   - Runs its full lifecycle at the downgraded tier
+   - Produces `synthesis-brief.json` and `decision-record.md` in its own session directory
+
+5. **Read child results** — the moderator reads decision-board's `synthesis-brief.json`:
+   - Extract: recommended option, consensus strength, conditions, dissenting views
+   - Extract: path to `decision-record.md` (the ADR)
+
+6. **Write `composition_completed` event** to the parent JSONL event log
+
+7. **Resume the review session**:
+   - Re-create the review team for remaining phases (final positions, synthesis)
+   - Write `topic_resolved` event with `resolved_by: "composition"` and `composition_id`
+   - Include the decision-board's recommendation in the context for remaining phases
+
+**Present composition results to user:**
+
+```
+--- Deliberation Complete: T002 — {title} ---
+
+Recommendation: {recommended_option}
+Consensus: {consensus_strength}% ({supporting}/{total} agents)
+Conditions: {conditions}
+ADR: {path_to_decision_record}
+
+Resuming review with this resolution applied.
+```
+
+**Error handling**: If the decision-board session fails or produces no usable result, the moderator:
+
+1. Logs a `composition_completed` event with `child_quality: "Error"`
+2. Re-creates the review team
+3. Falls back to the normal escalation flow (re-presents the escalation prompt without `[d]`)
 
 ### Early Termination
 
@@ -659,12 +736,12 @@ Once discussion concludes:
    Both agents run in parallel.
 
 6. **Post-synthesis directory audit**: After both synthesis agents complete, the moderator validates the session directory against the file-write allowlist:
-   - **Allowed files**: `review-events.jsonl`, `synthesis-brief.json`, `topics.json`, `session.lock`, `revised-document.md`, `discussion-log.md`
+   - **Allowed files**: `review-events.jsonl`, `synthesis-brief.json`, `topics.json`, `session.lock`, `revised-document.md`, `discussion-log.md`, `composition-request.json`
    - **Allowed directories and contents**: `opening/*.json`, `discussion/round-*/*.json`, `final-positions/*.json`
    - Any unexpected file triggers a `security_violation` event and user warning
    - Offending files are NOT included in the final output presentation
 
-7. **Write `session_end` event** to `review-events.jsonl` with final metrics (quality computed per formula in event-schemas.md, using metrics from the synthesis brief and synthesis agents' return summaries).
+7. **Write `session_end` event** to `review-events.jsonl` with final metrics (quality computed per formula in event-schemas.md, using metrics from the synthesis brief and synthesis agents' return summaries). Include `compositions_invoked` and `topics_resolved_by_composition` fields.
 
 8. **Present to user** using the appropriate terminal state message:
 
@@ -705,6 +782,21 @@ Review complete — includes {escalation_count} user-resolved escalation(s).
 
 ## User Decisions
 - T00X: {user's decision}
+
+Files: {file paths}
+```
+
+**With Compositions** (topics resolved via decision-board deliberation):
+
+```
+Review complete — includes {composition_count} decision-board deliberation(s).
+
+{findings output as above}
+
+## Deliberation Results
+- T00X: {recommendation} ({consensus}% consensus)
+  Conditions: {conditions}
+  ADR: {adr_path}
 
 Files: {file paths}
 ```
@@ -790,7 +882,7 @@ Team teardown (TeamDelete) already happened in Phase 5 step 4. This phase handle
 
 ### Cross-Session Manifest
 
-Append one entry per session to `~/.claude/deep-design-sessions/manifest.jsonl`. Schema is defined in `~/.claude/skills/deep-design/event-schemas.md`.
+Append one entry per session to `~/.claude/deep-design-sessions/manifest.jsonl`. Schema is defined in `~/.claude/skills/deep-design/event-schemas.md`. Include `compositions_invoked` and `composition_ids` fields.
 
 This enables historical tracking and informed tier suggestions at the confirmation gate.
 
@@ -969,6 +1061,7 @@ Approve this specialist? [Y/n]
 ~/.claude/skills/shared/
   orchestration.md            # Blackboard architecture protocol
   event-schemas-base.md       # Common event types
+  composition.md              # Skill composition protocol
   security.md                 # Security model
   tools/
     jsonl-utils.sh            # JSONL query utility

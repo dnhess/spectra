@@ -24,6 +24,7 @@ Each session creates this directory structure:
   session.lock                    # Lock file with TTL
   {event-log}.jsonl               # Moderator-only JSONL event log
   synthesis-brief.json            # Produced by moderator from agent files
+  composition-request.json        # Optional: written by moderator when composing with another skill
   opening/                        # Agent opening-round outputs
     {agent-name}.json
   discussion/                     # Agent discussion responses (per round)
@@ -173,7 +174,19 @@ Where `n` is the number of agents in `session_start.agents`.
 File-existence polling replaces heartbeat monitoring. There is no coordinator to monitor.
 
 ### No Coordinator Failure Mode
+
 With no coordinator, coordinator-failure is eliminated as a failure mode. The moderator (main Claude instance) drives the session directly and cannot "fail" independently.
+
+## Skill Composition
+
+Skills can invoke other skills mid-session using the composition protocol defined in `~/.claude/skills/shared/composition.md`. Key constraints:
+
+- **Sequential composition only**: Parent must `TeamDelete` before child `TeamCreate`. No concurrent teams.
+- **`composition-request.json`** bridges parent → child; child's `synthesis-brief.json` bridges child → parent.
+- **Maximum 1 composition per session** to bound cost and complexity.
+- **Tier downgrade**: Child runs one tier below parent (Deep → Standard, Standard → Quick).
+
+See `composition.md` for the full protocol, request schema, lifecycle, and error handling.
 
 ## Session Lock & Stale Detection
 

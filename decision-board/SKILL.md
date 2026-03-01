@@ -212,6 +212,26 @@ Skip this if the conversation is fresh (no prior messages).
 
 ## Phase 1: Classification & Tier Selection
 
+### Composition Input
+
+When invoked via the skill composition protocol (see `~/.claude/skills/shared/composition.md`), a `composition-request.json` file will be present in the parent skill's session directory. Check for this file at the path specified in the composition request.
+
+If `composition-request.json` is provided:
+
+1. **Read the request file** and extract fields to bootstrap the session:
+   - `request.question` → decision question
+   - `request.options` → options (if provided)
+   - `request.constraints` → constraints
+   - `request.context_summary` → context
+   - `request.positions` → initial position context for agents
+   - `request.source_file_paths` → source files to provide to agents
+2. **Use `child.tier_override`** as the tier (skip auto-selection)
+3. **Skip the confirmation gate** if `child.skip_confirmation` is `true`
+4. **Record `composition_id`** and `parent_session_id` in the `session_start` event
+5. **Skip the feedback survey** at session end if `child.skip_feedback` is `true`
+
+If no `composition-request.json` is present, proceed with normal user input parsing below.
+
 ### Parse Decision Input
 
 Extract from the user's message:
@@ -327,8 +347,13 @@ TTL values per tier:
 The moderator writes the `session_start` event directly to `decision-events.jsonl`:
 
 ```jsonl
-{"event_id":"uuid","sequence_number":1,"schema_version":"1.0.0","type":"session_start","timestamp":"ISO-8601","session_id":"decision-board-{topic}-{timestamp}","agents":["pragmatist","architect",...],"decision_question":"...","options":["..."],"constraints":["..."],"context":"...","tier":"standard"}
+{"event_id":"uuid","sequence_number":1,"schema_version":"1.0.0","type":"session_start","timestamp":"ISO-8601","session_id":"decision-board-{topic}-{timestamp}","agents":["pragmatist","architect",...],"decision_question":"...","options":["..."],"constraints":["..."],"context":"...","tier":"standard","composition_id":null,"parent_session_id":null}
 ```
+
+Optional composition fields:
+
+- `composition_id`: If invoked via composition, the `composition_id` from `composition-request.json`. `null` otherwise.
+- `parent_session_id`: If invoked via composition, the parent skill's `session_id`. `null` otherwise.
 
 ### Build Agent Prompts
 
@@ -755,7 +780,7 @@ Schema:
    Both agents run in parallel.
 
 7. **Post-synthesis directory audit**: After both synthesis agents complete, the moderator validates the session directory against the file-write allowlist:
-   - **Allowed files**: `decision-events.jsonl`, `synthesis-brief.json`, `session.lock`, `decision-record.md`, `debate-log.md`
+   - **Allowed files**: `decision-events.jsonl`, `synthesis-brief.json`, `session.lock`, `decision-record.md`, `debate-log.md`, `composition-request.json`
    - **Allowed directories and contents**: `opening/*.json`, `discussion/round-*/*.json`, `final-positions/*.json`
    - Any unexpected file triggers a `security_violation` event and user warning
    - Offending files are NOT included in the final output presentation
@@ -948,7 +973,7 @@ Team teardown (TeamDelete) already happened in Phase 5 step 5. This phase handle
 Append one entry per session to `~/.claude/decision-board-sessions/manifest.jsonl`:
 
 ```jsonl
-{"session_id":"...","timestamp":"ISO-8601","decision_question":"...","options":["..."],"tier":"standard","agent_count":5,"specialist_count":1,"quality":"Full","duration_seconds":360,"rounds_debated":2,"consensus_strength":0.78,"recommended_option":"hybrid","adopted_option":null,"concessions_count":2,"dissenting_agents_count":1,"feedback_rating":null}
+{"session_id":"...","timestamp":"ISO-8601","project":"my-app","decision_question":"...","options":["..."],"tier":"standard","agent_count":5,"specialist_count":1,"quality":"Full","duration_seconds":360,"rounds_debated":2,"consensus_strength":0.78,"recommended_option":"hybrid","adopted_option":null,"concessions_count":2,"dissenting_agents_count":1,"feedback_rating":null,"parent_composition_id":null,"parent_session_id":null}
 ```
 
 This enables historical tracking and informed tier suggestions at the confirmation gate.
@@ -1061,6 +1086,7 @@ Stale sessions are detected by TTL expiration in the lock file, not by PID check
 ~/.claude/skills/shared/
   orchestration.md            # Blackboard architecture protocol
   event-schemas-base.md       # Common event types
+  composition.md              # Skill composition protocol
   security.md                 # Security model
   tools/
     jsonl-utils.sh            # JSONL query utility

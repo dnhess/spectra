@@ -149,6 +149,92 @@ Logged when the moderator's post-phase directory audit detects unexpected file a
 - `path_escape`: A write attempt targeted a path outside the session directory
 - `action_taken`: `flagged` (logged only), `excluded` (data excluded from synthesis), `session_halted` (session aborted)
 
+### `composition_invoked`
+
+Written by the parent skill's moderator when a composition is initiated. See `~/.claude/skills/shared/composition.md` for the full composition protocol.
+
+```json
+{
+  "event_id": "uuid",
+  "sequence_number": 12,
+  "schema_version": "1.0.0",
+  "type": "composition_invoked",
+  "timestamp": "ISO-8601",
+  "composition_id": "comp-{uuid}",
+  "child_skill": "decision-board",
+  "child_tier": "standard",
+  "trigger_reason": "deadlock on T002 — MFA scope",
+  "request_file": "composition-request.json"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `composition_id` | String | Unique identifier for this composition (`comp-{uuid}`) |
+| `child_skill` | String | The skill being invoked as the child |
+| `child_tier` | String | Tier the child will run at (one below parent) |
+| `trigger_reason` | String | Human-readable reason for the composition |
+| `request_file` | String | Filename of the composition request (always `composition-request.json`) |
+
+### `composition_completed`
+
+Written by the parent skill's moderator after the child skill finishes. Pairs with a prior `composition_invoked` event via `composition_id`.
+
+```json
+{
+  "event_id": "uuid",
+  "sequence_number": 13,
+  "schema_version": "1.0.0",
+  "type": "composition_completed",
+  "timestamp": "ISO-8601",
+  "composition_id": "comp-{uuid}",
+  "child_session_id": "decision-board-mfa-scope-20260228T170100",
+  "child_session_dir": "~/.claude/decision-board-sessions/mfa-scope-20260228T170100/",
+  "child_quality": "Full",
+  "outcome_summary": "Recommended: MFA for admin roles now, all users in v2. 85% consensus.",
+  "parent_event_id": "uuid-of-composition_invoked"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `composition_id` | String | Matches the `composition_invoked` event |
+| `child_session_id` | String | The child skill's session ID |
+| `child_session_dir` | String | Path to the child's session directory |
+| `child_quality` | String | Child session quality (`Full`, `Partial`, `Minimal`, or `Error`) |
+| `outcome_summary` | String | Human-readable summary of the child's result |
+| `parent_event_id` | String | `event_id` of the corresponding `composition_invoked` event |
+
+## Cross-Session Manifest Base Schema
+
+Every manifest entry MUST include these common fields. Domain-specific fields are defined in each skill's `event-schemas.md`.
+
+```json
+{
+  "session_id": "{skill}-{topic}-{timestamp}",
+  "timestamp": "ISO-8601",
+  "project": "basename of working directory at invocation time",
+  "tier": "quick | standard | deep",
+  "agent_count": 7,
+  "specialist_count": 1,
+  "quality": "Full | Partial | Minimal",
+  "duration_seconds": 480,
+  "feedback_rating": "very_helpful | somewhat_helpful | not_helpful | null"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | String | Session identifier, matches `session_start.session_id` |
+| `timestamp` | String | ISO 8601 UTC timestamp of session completion |
+| `project` | String | Basename of the working directory at invocation time (e.g., `my-app`). Enables per-project filtering of session history |
+| `tier` | String | Session tier (`quick`, `standard`, or `deep`) |
+| `agent_count` | Integer | Number of agents used |
+| `specialist_count` | Integer | Number of specialist agents used |
+| `quality` | String | Session quality (`Full`, `Partial`, or `Minimal`) |
+| `duration_seconds` | Integer or null | Wall-clock duration of the session |
+| `feedback_rating` | String or null | Post-session user rating. Nullable (populated after user provides feedback) |
+
 ## JSONL Write Semantics
 
 - **Single writer**: The moderator writes ALL events throughout the entire session. No writer handoff.
