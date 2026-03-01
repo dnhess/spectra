@@ -20,13 +20,41 @@ Triggers: architectural decisions, technology selection, build-vs-buy, migration
 ## Installation
 
 ```bash
+git clone https://github.com/dnhess/spectra.git
+cd spectra
 ./install.sh
 ```
 
 This creates symlinks in `~/.claude/skills/` pointing to this repository:
+
 - `~/.claude/skills/shared/` → shared orchestration library
 - `~/.claude/skills/deep-design/` → design review skill
 - `~/.claude/skills/decision-board/` → decision debate skill
+
+### Recommended permissions
+
+Add these to `~/.claude/settings.json` so skill sessions run without manual approval prompts:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p ~/.claude/deep-design-sessions/*)",
+      "Bash(mkdir -p ~/.claude/decision-board-sessions/*)",
+      "Bash(python3 -c *)",
+      "Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)",
+      "Write(~/.claude/deep-design-sessions/**)",
+      "Write(~/.claude/decision-board-sessions/**)",
+      "Read(~/.claude/deep-design-sessions/**)",
+      "Read(~/.claude/decision-board-sessions/**)",
+      "Glob(~/.claude/deep-design-sessions/**)",
+      "Glob(~/.claude/decision-board-sessions/**)"
+    ]
+  }
+}
+```
+
+These are scoped to session directories only — they don't affect permissions on your codebase.
 
 ## Architecture
 
