@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Simplified all persona files to ~10-15 lines (identity + focus + voice format)
+- Removed Red Flags, Natural Collaborators, and boilerplate from all personas
+- Updated custom specialist template in deep-design SKILL.md to match simplified format
+
 ### Added
 
+- CEO/Strategist "Hiring Authority" for on-the-fly persona creation when domain gaps exist
+- **deep-design** core personas: Technical Writer, End User Advocate
+- **deep-design** specialists: Performance/SRE Engineer, Legal/Compliance Generalist
+- **decision-board** core persona: End User Advocate
+- **decision-board** specialists: Performance/SRE, Legal/Compliance, Technical Writer
 - `project` field on cross-session manifest entries for both deep-design and decision-board — captures the working directory basename at invocation time, enabling per-project filtering of session history
 - **Cross-session manifest base schema** (`shared/event-schemas-base.md`) — common manifest fields (`session_id`, `timestamp`, `project`, `tier`, `agent_count`, `specialist_count`, `quality`, `duration_seconds`, `feedback_rating`) extracted into shared base; each skill's `event-schemas.md` now defines only domain-specific manifest fields
 - **Skill composition protocol** (`shared/composition.md`) — generic protocol enabling any skill to invoke another skill mid-session with sequential composition, user gating, and tier downgrade
