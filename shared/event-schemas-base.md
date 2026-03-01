@@ -16,6 +16,27 @@ Every event MUST include these fields:
 
 Response events SHOULD include `parent_event_id` referencing the event they respond to. Full causality tracking deferred to v2.
 
+## Schema Versioning
+
+Event schemas follow [Semantic Versioning](https://semver.org/):
+
+- **Current version**: `1.0.0`
+- **Minor version bump** (e.g., 1.0.0 to 1.1.0): Additive changes only — new optional fields on existing event types, new event types. Readers MUST ignore unknown fields. Writers MUST NOT remove or rename existing fields.
+- **Major version bump** (e.g., 1.x to 2.0.0): Breaking changes — removed fields, renamed fields, changed field types or semantics. Readers SHOULD reject events with an unrecognized major version rather than silently misinterpreting data.
+
+### Compatibility Contract
+
+- All events carry `schema_version` in their metadata (see above)
+- Consumers reading events MUST tolerate unknown fields (forward compatibility)
+- Consumers MAY reject events whose major version exceeds their known maximum
+- The `schema_migrations` table in `~/.spectra/spectra.db` tracks which schema version the local installation expects (see `shared/tools/db-utils.sh`)
+
+### Version History
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0.0 | 2026-02-28 | Initial schema — all base event types |
+
 ## Common Event Types
 
 ### `session_start`
@@ -58,7 +79,7 @@ Valid phases and triggers are skill-specific.
 
 ### `agent_complete`
 
-An agent has finished a phase (completed, timed out, or errored).
+An agent has finished a phase (completed, timed out, errored, or failed validation).
 
 ```json
 {
@@ -69,7 +90,7 @@ An agent has finished a phase (completed, timed out, or errored).
   "timestamp": "ISO-8601",
   "agent": "agent-name",
   "phase": "opening | discussion | final_positions",
-  "status": "completed | timeout | error"
+  "status": "completed | timeout | error | validation_failed | read_error"
 }
 ```
 
