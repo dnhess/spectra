@@ -259,7 +259,12 @@ create_skill_symlinks() {
   mkdir -p "$CLAUDE_SKILLS_DIR"
   for skill in "${KNOWN_SKILLS[@]}"; do
     if [[ -d "$source_base/$skill" ]]; then
-      ln -sfn "$source_base/$skill" "$CLAUDE_SKILLS_DIR/$skill"
+      local target="$CLAUDE_SKILLS_DIR/$skill"
+      # Remove existing directory (non-symlink) so ln -sfn can create the symlink
+      if [[ -d "$target" && ! -L "$target" ]]; then
+        rm -rf "$target"
+      fi
+      ln -sfn "$source_base/$skill" "$target"
       log_success "Linked $skill"
     fi
   done
@@ -563,14 +568,14 @@ cmd_link() {
     exit 1
   fi
 
-  # Bootstrap ~/.spectra if not installed (first-time dev setup)
-  if [[ ! -d "$SPECTRA_HOME" ]]; then
+  # Bootstrap ~/.spectra if not fully set up (first-time dev setup)
+  if [[ ! -x "$BIN_DIR/spectra" ]]; then
     log_info "Bootstrapping ~/.spectra for dev setup..."
     mkdir -p "$SPECTRA_HOME"/{skills,sessions,backups,bin}
     for skill in deep-design decision-board code-review; do
       mkdir -p "$SESSIONS_DIR/$skill"
     done
-    echo "$SPECTRA_VERSION" > "$VERSION_FILE"
+    [[ -f "$VERSION_FILE" ]] || echo "$SPECTRA_VERSION" > "$VERSION_FILE"
     # Copy CLI tools so they're available at ~/.spectra/bin/
     cp "$repo_path/bin/spectra" "$BIN_DIR/spectra"
     chmod +x "$BIN_DIR/spectra"
@@ -578,7 +583,7 @@ cmd_link() {
       cp "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
       chmod +x "$BIN_DIR/json-write.sh"
     fi
-    # Add to PATH
+    # Add to PATH via ~/.local/bin
     mkdir -p "$HOME/.local/bin"
     ln -sfn "$BIN_DIR/spectra" "$HOME/.local/bin/spectra"
     if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
