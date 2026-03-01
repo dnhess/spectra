@@ -50,7 +50,7 @@ These are not suggestions — CI will block merge if violated:
 - **Conventional commits required.** Every commit must follow `type: description` format. Valid types: `feat`, `fix`, `docs`, `chore`, `refactor`, `style`, `ci`, `test`. Enforced by commitlint in CI and pre-commit hook.
 - **Markdown lint must pass.** Config in `.markdownlint.yml`. Run locally: `npm run lint`
 - **ShellCheck must pass** on all `.sh` files.
-- **CHANGELOG.md must be updated** for any PR that changes skills or shared infrastructure. Add entries under `[Unreleased]`.
+- **CHANGELOG.md is auto-generated** by release-please. Do not edit it manually. Write meaningful conventional commit messages instead — they become the changelog.
 - **CODEOWNERS review required** for changes to `shared/`, `install.sh`, `SKILL.md`, or `event-schemas.md`.
 - **All PRs require approval** before merge. No direct pushes to main.
 

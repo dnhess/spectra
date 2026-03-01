@@ -49,9 +49,12 @@ chore: update .gitignore
 
 1. Ensure your skill files follow the established format
 2. Test with Claude Code if modifying orchestration logic
-3. Update `CHANGELOG.md` under `[Unreleased]` if adding or changing skills
-4. Update `install.sh` if adding a new skill directory
-5. Submit your PR with a clear description of what changed and why
+3. Update `install.sh` if adding a new skill directory
+4. Submit your PR with a clear description of what changed and why
+
+> **Note**: You do not need to update `CHANGELOG.md` manually.
+> [release-please](https://github.com/googleapis/release-please) generates
+> changelog entries automatically from conventional commit messages.
 
 ## Adding a New Skill
 
