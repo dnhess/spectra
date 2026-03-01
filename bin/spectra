@@ -659,19 +659,17 @@ cmd_link() {
   fi
 
   # Bootstrap ~/.spectra if not fully set up (first-time dev setup)
-  if [[ ! -x "$BIN_DIR/spectra" ]]; then
+  if [[ ! -e "$BIN_DIR/spectra" ]]; then
     log_info "Bootstrapping ~/.spectra for dev setup..."
     mkdir -p "$SPECTRA_HOME"/{skills,sessions,backups,bin}
     for skill in deep-design decision-board code-review; do
       mkdir -p "$SESSIONS_DIR/$skill"
     done
     [[ -f "$VERSION_FILE" ]] || echo "$SPECTRA_VERSION" > "$VERSION_FILE"
-    # Copy CLI tools so they're available at ~/.spectra/bin/
-    cp "$repo_path/bin/spectra" "$BIN_DIR/spectra"
-    chmod +x "$BIN_DIR/spectra"
+    # Symlink CLI tools to repo (link_bin_files below handles the rest)
+    ln -sfn "$repo_path/bin/spectra" "$BIN_DIR/spectra"
     if [[ -f "$repo_path/bin/json-write.sh" ]]; then
-      cp "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
-      chmod +x "$BIN_DIR/json-write.sh"
+      ln -sfn "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
     fi
     # Add to PATH via ~/.local/bin
     mkdir -p "$HOME/.local/bin"
@@ -714,6 +712,13 @@ print()
 
   # Create direct symlinks to repo
   create_skill_symlinks "$repo_path"
+
+  # Symlink CLI bin files to repo so dev changes are picked up immediately
+  ln -sfn "$repo_path/bin/spectra" "$BIN_DIR/spectra"
+  if [[ -f "$repo_path/bin/json-write.sh" ]]; then
+    ln -sfn "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+  fi
+  log_success "Linked CLI to repo"
 
   # Configure permissions
   settings_backup
@@ -760,11 +765,33 @@ cmd_unlink() {
     mkdir -p "$SKILLS_DIR"
     cp -R "$_DVR_EXTRACT_DIR"/* "$SKILLS_DIR/"
 
+    # Restore bin files as copies from the downloaded release
+    install_bin_files "$SKILLS_DIR"
+
     pop_cleanup
     rm -rf "$_DVR_TMP_DIR"
 
     create_skill_symlinks "$SKILLS_DIR"
     echo "${_DVR_TAG#v}" > "$VERSION_FILE"
+  else
+    # Restore bin files as copies from existing release skills
+    # (link created symlinks pointing to dev repo)
+    if [[ -f "$SKILLS_DIR/bin/spectra" ]]; then
+      install_bin_files "$SKILLS_DIR"
+    else
+      # bin/ was already removed during install; copy from the installed bin
+      # The symlinks still point to the repo, so resolve and copy
+      local repo_path
+      repo_path="$(cat "$SPECTRA_HOME/dev-repo" 2>/dev/null || echo "")"
+      if [[ -n "$repo_path" ]] && [[ -f "$repo_path/bin/spectra" ]]; then
+        cp "$repo_path/bin/spectra" "$BIN_DIR/spectra"
+        chmod +x "$BIN_DIR/spectra"
+        if [[ -f "$repo_path/bin/json-write.sh" ]]; then
+          cp "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+          chmod +x "$BIN_DIR/json-write.sh"
+        fi
+      fi
+    fi
   fi
 
   echo "release" > "$MODE_FILE"
