@@ -10,5 +10,6 @@ mkdir -p "$SKILLS_DIR"
 ln -sfn "$REPO_DIR/shared" "$SKILLS_DIR/shared"
 ln -sfn "$REPO_DIR/deep-design" "$SKILLS_DIR/deep-design"
 ln -sfn "$REPO_DIR/decision-board" "$SKILLS_DIR/decision-board"
+ln -sfn "$REPO_DIR/code-review" "$SKILLS_DIR/code-review"
 
 echo "Spectra installed. Symlinks created in $SKILLS_DIR"
