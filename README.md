@@ -17,40 +17,56 @@ Triggers: design docs, architecture specs, product requirements, feature proposa
 
 Triggers: architectural decisions, technology selection, build-vs-buy, migration strategy.
 
+### code-review
+**Multi-perspective code review.** Use when code changes need thorough review from multiple specialist viewpoints before merge.
+
+Triggers: pull requests, code changes, refactoring review.
+
 ## Installation
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dnhess/spectra/main/install.sh | bash
+```
+
+This downloads the latest release to `~/.spectra/`, creates symlinks in
+`~/.claude/skills/`, and configures permissions automatically.
+
+### Developer setup
+
+For contributors working on Spectra itself:
 
 ```bash
 git clone https://github.com/dnhess/spectra.git
 cd spectra
-./install.sh
+npm install && npm run prepare
+spectra link .
 ```
 
-This creates symlinks in `~/.claude/skills/` pointing to this repository:
+### Management
 
-- `~/.claude/skills/shared/` → shared orchestration library
-- `~/.claude/skills/deep-design/` → design review skill
-- `~/.claude/skills/decision-board/` → decision debate skill
+```bash
+spectra status      # Show installation info
+spectra update      # Update to latest release
+spectra doctor      # Diagnose issues
+spectra uninstall   # Remove Spectra
+```
 
 ### Recommended permissions
 
-Add these to `~/.claude/settings.json` so skill sessions run without manual approval prompts:
+The installer configures these automatically. Manual setup is only needed
+for development from source. Add to `~/.claude/settings.json`:
 
 ```json
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir -p ~/.claude/deep-design-sessions/*)",
-      "Bash(mkdir -p ~/.claude/decision-board-sessions/*)",
-      "Bash(python3 -c *)",
+      "Bash(mkdir -p ~/.spectra/sessions/*)",
+      "Bash(bash ~/.spectra/bin/json-write.sh *)",
       "Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)",
-      "Write(~/.claude/deep-design-sessions/**)",
-      "Write(~/.claude/decision-board-sessions/**)",
-      "Read(~/.claude/deep-design-sessions/**)",
-      "Read(~/.claude/decision-board-sessions/**)",
-      "Glob(~/.claude/deep-design-sessions/**)",
-      "Glob(~/.claude/decision-board-sessions/**)",
-      "Write(~/.claude/.active-deep-design-session)",
-      "Write(~/.claude/.active-decision-board-session)"
+      "Write(~/.spectra/sessions/**)",
+      "Read(~/.spectra/sessions/**)",
+      "Glob(~/.spectra/sessions/**)",
+      "Write(~/.spectra/.active-*)"
     ]
   }
 }
@@ -93,8 +109,11 @@ See `shared/orchestration.md` for the full protocol.
 
 ```
 spectra/
+  bin/
+    spectra                     # CLI script
+    json-write.sh               # Scoped JSON writer
   README.md                     # This file
-  install.sh                    # Symlink installer
+  install.sh                    # Curl-based installer
   shared/                       # Shared orchestration library (not a skill)
     orchestration.md            # Blackboard protocol, polling, session management
     event-schemas-base.md       # Common event types across all skills
@@ -109,6 +128,10 @@ spectra/
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
     personas/                   # 6 core + 6 specialist debaters
+  code-review/                  # Code review skill
+    SKILL.md                    # Domain orchestration
+    event-schemas.md            # Domain-specific event types
+    personas/                   # Core + specialist reviewers
 ```
 
 ## Adding New Skills
@@ -124,6 +147,6 @@ To add a new multi-agent skill:
    - Define handoff content mapping for your domain
    - Define which manifest field identifies repeat sessions
    - Add checkpoint timing appropriate for your session phases
-6. Add a symlink line to `install.sh`
+6. Add the skill name to `KNOWN_SKILLS` in `bin/spectra`
 
 The shared infrastructure handles: session directory management, polling protocol, JSONL event writing, synthesis pipeline, fault tolerance, security, and context persistence.

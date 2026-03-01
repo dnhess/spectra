@@ -4,6 +4,9 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 
 ## Structure
 
+- `bin/` — CLI scripts
+  - `spectra` — Main CLI (install, update, link, doctor, etc.)
+  - `json-write.sh` — Scoped JSON writer (replaces broad `python3 -c` permission)
 - `shared/` — Reusable orchestration infrastructure (not a skill itself)
   - `orchestration.md` — Blackboard protocol, polling, session management
   - `event-schemas-base.md` — Common event types (session_start, phase_transition, agent_complete, session_complete, session_end, feedback, security_violation, composition_invoked, composition_completed)
@@ -30,8 +33,8 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 ## Conventions
 
 - All agents use `general-purpose` subagent type with `bypassPermissions` mode (needed for file writes). Security is enforced via prompt-level path constraints and post-phase directory audits.
-- Agent output files are always JSON, serialized with `python3 -c 'import json; ...'` — never string concatenation.
-- Session directories live under `~/.claude/{skill-name}-sessions/`.
+- Agent output files are always JSON, serialized with `python3 -c 'import json; ...'` — never string concatenation. This applies within agent `bypassPermissions` context; the user-facing permission entry uses `bin/json-write.sh` instead.
+- Session directories live under `~/.spectra/sessions/{skill-name}/`.
 - Persona files are plain markdown in `personas/` (core) and `personas/specialists/` (domain specialists).
 - Domain event schemas reference `shared/event-schemas-base.md` for common types — never duplicate them.
 
@@ -41,7 +44,7 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 - When adding domain-specific events, add to the skill's own `event-schemas.md`, not to the shared base.
 - Never add coordinator, heartbeat, or cost tracking patterns — these were intentionally removed.
 - Persona files are independent of the orchestration layer. Edit freely without touching SKILL.md.
-- `install.sh` creates symlinks into `~/.claude/skills/`. Update it when adding new skills.
+- The `spectra` CLI manages symlinks into `~/.claude/skills/`. When adding new skills, update `KNOWN_SKILLS` in `bin/spectra`.
 
 ## Enforced Standards
 
