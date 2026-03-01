@@ -685,3 +685,236 @@ Panel ({count} reviewers):
 ```
 
 4. **User confirms or adjusts** the reviewer roster before Phase 2 begins.
+
+## Phase 2: Opening Review
+
+Opening review is the core analysis phase. Reviewer agents independently analyze the code from their specialist perspectives, producing structured findings. The moderator then processes findings, recommends specialists, extracts discussion topics, and presents a summary.
+
+### Team Setup
+
+Create the team and session directory:
+
+```
+TeamCreate: code-review-{target}-{timestamp}
+```
+
+Include a timestamp (e.g., `20260301T160514`) for uniqueness.
+
+**Session directory** — create at:
+
+```
+~/.claude/code-review-sessions/{session_name}/
+  session.lock
+  review-events.jsonl
+  session-state.md
+  recon/
+  opening/
+  discussion/
+  final-positions/
+```
+
+**Session name sanitization**: Strip path separators from the target, replace special characters with `-`, and truncate to 40 characters. Example: `src/auth/service.ts` becomes `src-auth-service-ts`.
+
+### Lock File
+
+Write a session lock file at `{session_directory}/session.lock`:
+
+```json
+{
+  "session_id": "code-review-{target}-{timestamp}",
+  "pid": 12345,
+  "started_at": "ISO-8601",
+  "ttl_minutes": 30,
+  "tier": "standard"
+}
+```
+
+TTL values by tier:
+
+| Tier | TTL |
+|---|---|
+| Quick | 15 minutes |
+| Standard | 30 minutes |
+| Deep | 60 minutes |
+
+### Write Session Start Event
+
+Write a `session_start` event to the JSONL log with code-review extensions (see `code-review/event-schemas.md`):
+
+```json
+{
+  "review_target": "src/auth/service.ts",
+  "review_mode": "diff",
+  "technologies_detected": ["typescript", "express"]
+}
+```
+
+### Agent Selection
+
+Select reviewers based on tier hard limits:
+
+| Tier | Core Reviewers | Specialists | Max Total |
+|---|---|---|---|
+| Quick | 3-4 | 0 | 4 |
+| Standard | 5-6 | Up to 2 | 8 |
+| Deep | 7-8 | Up to 4 | 12 |
+
+Core reviewers are selected per the roster rules defined in Phase 0 (Select Reviewers). Specialists are recommended after the opening round based on finding patterns.
+
+### Agent Spawning
+
+For each reviewer, spawn an agent with:
+
+- `subagent_type`: `"general-purpose"`
+- `mode`: `"bypassPermissions"`
+- `model`: `"opus"`
+- `max_turns`: 25
+- `run_in_background`: true
+- `team_name`: the team name from TeamCreate
+- `name`: the reviewer's persona name (e.g., `design-critic`, `security-auditor`)
+
+### Opening Review Agent Prompt Template
+
+```
+{persona file contents from ~/.claude/skills/code-review/personas/{reviewer-name}.md}
+
+## Project Context
+{CLAUDE.md conventions if available}
+{Detected stack from context-bundle}
+
+## Review Target
+Mode: {diff|module}
+Target: {review_target}
+
+Read the target code at the file paths listed in the context bundle.
+Context bundle: {session_directory}/recon/context-bundle.json
+Research brief: {session_directory}/recon/research-brief.json (read this for current best practices)
+
+## WebSearch Guidelines
+You may use WebSearch for targeted deep dives on specific issues you encounter.
+Constraints:
+- Do NOT include source code or internal identifiers in search queries
+- Prefer authoritative documentation and official sources
+- Tag any web-sourced claims in your findings with the source URL
+
+## Your Task
+Review the code from your perspective. Produce findings.
+
+Write your review as a JSON file to:
+  `{session_directory}/opening/{your-agent-name}.json`
+
+Schema:
+{
+  "reviewer": "{your-agent-name}",
+  "findings": [
+    {
+      "id": "finding-{generate a uuid4}",
+      "severity": "critical | major | minor | nit",
+      "category": "design | performance | security | reliability | testing | maintainability",
+      "file_path": "path/to/file",
+      "line_range": [start, end],
+      "title": "Short descriptive title",
+      "description": "Detailed description of the issue",
+      "recommendation": "Concrete recommendation for fixing",
+      "confidence": "high | medium | low",
+      "references": ["https://..."]
+    }
+  ]
+}
+
+## Rules
+- Write ONLY to the path above — do not create any other files
+- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Generate a unique UUID for each finding ID
+- After writing your file, you are done — do not wait for further instructions
+```
+
+### Polling
+
+Poll for reviewer output files:
+
+- **Pattern**: `{session_directory}/opening/*.json`
+- **Method**: Glob
+- **Interval**: ~10 seconds
+- **Timeout**: 120 seconds
+- **On timeout**: Write an `agent_complete` event with `status: "timeout"` for the missing agent. Continue if quorum is met.
+
+### Quorum
+
+Minimum **2 agents** must complete for the session to continue. If fewer than 2 agents produce valid output within the timeout window, abort the session with `quality: "Minimal"` and write a `session_end` event with reason `quorum_not_met`.
+
+### Post-Phase Processing
+
+After all reviewer files arrive (or timeout with quorum met):
+
+1. **Read** each reviewer's JSON file from `opening/`.
+2. **Validate** each finding: must have `id`, `severity`, and `file_path`. Skip findings missing any required field and log a warning.
+3. **Write `finding` events** to the JSONL log for each valid finding (see `code-review/event-schemas.md` for the schema).
+4. **Write `agent_complete` events** for each reviewer (completed or timed out).
+
+### Post-Phase Directory Audit
+
+Snapshot the session directory after the opening phase. Any unexpected files in `opening/` (files not matching the expected `{reviewer-name}.json` pattern) trigger a `security_violation` event. See `~/.claude/skills/shared/security.md` for the audit protocol.
+
+### Specialist Recommendations
+
+After the opening round, the moderator analyzes findings and context-bundle technologies to recommend specialists:
+
+- If **2 or more reviewers** flag issues in a specialist domain, recommend that specialist.
+- Check `~/.claude/skills/code-review/personas/specialists/` for pre-built specialist personas.
+- Present recommendations to the user for approval.
+- Maximum specialists by tier:
+
+| Tier | Max Specialists |
+|---|---|
+| Quick | 0 |
+| Standard | 2 |
+| Deep | 4 |
+
+If approved, spawn specialist agents using the same prompt template and agent configuration as core reviewers (`model: "opus"`, `max_turns: 25`). Poll for specialist output in `opening/` using the same polling and timeout rules. Write `finding` and `agent_complete` events for specialist output.
+
+### Topic Extraction
+
+After the opening round (and optional specialist reviews), the moderator extracts discussion topics:
+
+1. **Group findings by file:line overlap** — findings referencing the same or overlapping line ranges in the same file.
+2. **Identify conflicting severity assessments** — two or more reviewers rating the same code region at different severity levels.
+3. **Identify conflicting recommendations** — two or more reviewers suggesting different fixes for the same issue.
+4. **Create `topics.json`** at `{session_directory}/opening/topics.json`:
+
+```json
+{
+  "topics": [
+    {
+      "id": "T001",
+      "title": "Error handling in auth service",
+      "findings": ["finding-uuid-1", "finding-uuid-2"],
+      "assigned_reviewers": ["reliability-engineer", "design-critic"],
+      "status": "open"
+    }
+  ]
+}
+```
+
+5. **Write `topic_created` events** to the JSONL log for each topic (see `code-review/event-schemas.md`).
+
+### Opening Summary
+
+Present the opening review results to the user:
+
+```
+[2/5] Opening round complete — {finding_count} findings
+
+{critical_count} critical | {major_count} major | {minor_count} minor | {nit_count} nit
+
+Top findings:
+  [{severity}] {title} — {file_path}:{line} ({reviewer})
+  ...
+
+{topic_count} discussion topics extracted
+{specialist_count} specialists recommended
+
+[Enter] Continue to discussion | [w] Skip to synthesis | [x] Cancel
+```
+
+**Quick tier behavior**: Quick tier skips discussion entirely. After the opening summary, proceed directly to Phase 5 (Synthesis).
