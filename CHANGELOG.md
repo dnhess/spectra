@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Round Summarization Protocol in `shared/orchestration.md` — moderator-produced `round-brief.json` replaces raw position injection, converting O(agents^2 x rounds^2) token growth to O(agents x rounds)
+- `round-brief.json` artifact in session directory template and phase allowlists
 - SQLite hybrid storage foundation (`shared/tools/db-utils.sh`) with sessions table for cross-session metadata queries, WAL mode, and parameterized queries
 - Unified output validation pipeline (`shared/tools/validate-output.sh`) with 5-stage validation (size, JSON parse, schema, content sanitize, accept) in warn-only mode
 - Validation schemas for all skill phases (`shared/schemas/`) — 6 schema definitions for deep-design and decision-board agent outputs
@@ -51,6 +53,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code-review opening template: added file-read restriction and Prior Session Context placeholder
 - Code-review discussion template: added explicit WebSearch prohibition in Rules section
 - Code-review manifest: fixed stale `source` to `bash` for jsonl-utils.sh invocation
+- Model allocation tables added to deep-design and decision-board; code-review flat table updated to tier-based
+- `max_turns` reduced: opening/scout/research 18, discussion 12, final position 12, synthesis 18
+- Cost Optimization Strategies section added to code-review (parity with deep-design and decision-board)
+- Shared orchestration: added model selection guidance in Agent Spawning section
+- Discussion templates updated: deep-design and decision-board use `ROUND-SUMMARY` delimiters instead of `AGENT-POSITIONS`; code-review uses condensed summary within existing `REVIEW-DATA` delimiters
+- Cost Optimization Strategies updated to "(active)" status in all 3 skills
+- `shared/security.md`: updated intra-session isolation delimiter documentation
 
 ## [0.2.2] - 2026-03-01
 

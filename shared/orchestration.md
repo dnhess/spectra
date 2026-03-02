@@ -32,6 +32,7 @@ Each session creates this directory structure:
   discussion/                     # Agent discussion responses (per round)
     round-{n}/
       {agent-name}.json
+      round-brief.json            # Moderator-produced condensed round summary
   final-positions/                # Agent final recommendations
     {agent-name}.json
   topics.json                     # Discussion topics (written by moderator)
@@ -136,8 +137,12 @@ conditionals. See Finding 5 design review session for full rationale.
 All agents are spawned as:
 - `subagent_type`: `"general-purpose"`
 - `mode`: `"bypassPermissions"` — required for file writes
-- `max_turns`: Phase-appropriate limit (typically 15-25 per agent)
+- `max_turns`: Phase-appropriate limit (typically 12-18 per agent)
 - `run_in_background`: `true` — agents run concurrently
+
+Model selection is skill-specific and tier-dependent. Each SKILL.md defines
+a Model Allocation table. Default: `opus` for analysis-heavy opening phases,
+`sonnet` for discussion, final positions, and synthesis.
 
 For discussion rounds, **spawn fresh agents** rather than reusing previous-round agents. Each round's agents receive:
 - The topics they're assigned to (from `topics.json`)
@@ -145,6 +150,51 @@ For discussion rounds, **spawn fresh agents** rather than reusing previous-round
 - Instruction to write to `discussion/round-{n}/{agent-name}.json`
 
 This avoids SendMessage entirely for discussion. More expensive (fresh agent per round) but guaranteed delivery.
+
+### Round Summarization Protocol
+
+After each discussion/debate round completes, the **moderator** produces a
+condensed round brief that replaces raw position injection in the next round's
+agent prompts. This converts token growth from O(agents^2 x rounds^2) to
+O(agents x rounds).
+
+**Round brief location**: `discussion/round-{n}/round-brief.json`
+
+**Schema**:
+
+```json
+{
+  "round": 1,
+  "topics": [
+    {
+      "id": "T001",
+      "title": "Topic title",
+      "status": "active | resolved | deferred",
+      "positions": [
+        {"agent": "agent-name", "stance": "1-2 sentence condensed position"}
+      ],
+      "shifts_this_round": ["agent-name shifted from X to Y"],
+      "resolution": null
+    }
+  ],
+  "meta": {
+    "agents_responded": 5,
+    "consensus_direction": "converging | diverging | stable"
+  }
+}
+```
+
+**Constraints**:
+
+- **Size cap**: ~1000 tokens (~4000 characters). Resolved topics get one line
+  summarizing the resolution. Ongoing topics get proportionally more space.
+- **Writer**: Moderator only (consistent with single-writer rule)
+- **Recovery**: Path included in `session-state.md` checkpoints for compaction
+  resilience. On recovery, re-read from `round-brief.json` rather than
+  re-processing raw agent files.
+
+Phase allowlists should include `round-brief.json` as an allowed file in
+discussion round directories.
 
 ## Polling Protocol
 

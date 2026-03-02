@@ -183,13 +183,24 @@ digraph code_review {
 
 ### Model Allocation
 
-| Agent | Model | Reasoning |
-|---|---|---|
-| Scout | sonnet | Judgment about relevance, not deep reasoning |
-| Research | sonnet | Query formulation and summarization |
-| Opening reviewers | opus | Nuanced code analysis — quality matters most |
-| Discussion agents | opus | Argumentation and trade-off reasoning |
-| Synthesis | sonnet | Structural work — ranking, formatting, dedup |
+| Agent | Quick | Standard | Deep |
+|---|---|---|---|
+| Scout | sonnet | sonnet | sonnet |
+| Research | N/A | sonnet | sonnet |
+| Opening reviewers | opus | opus | opus |
+| Discussion agents | N/A | sonnet | opus |
+| Final position agents | N/A | sonnet | sonnet |
+| Synthesis | sonnet | sonnet | sonnet |
+
+### Cost Optimization Strategies
+
+- **Round summarization** (active) — moderator produces condensed ~1000-token
+  round briefs instead of injecting raw agent positions, converting O(agents^2
+  x rounds^2) growth to O(agents x rounds)
+- Consensus-based early termination — skip further discussion on findings with
+  no remaining challengers
+- Lazy specialist activation in Deep tier — start with core reviewers, activate
+  specialists only if opening findings flag issues in their domain
 
 ### Tier Auto-Selection
 
@@ -376,7 +387,7 @@ The scout agent explores the review target and produces a structured context bun
 - `subagent_type`: `"general-purpose"`
 - `mode`: `"bypassPermissions"`
 - `model`: `"sonnet"`
-- `max_turns`: 20
+- `max_turns`: 18
 - `run_in_background`: true
 
 **Read-boundary constraints** (enforced in the scout prompt):
@@ -544,7 +555,7 @@ The research agent takes the detected technologies from the context bundle and s
 - `subagent_type`: `"general-purpose"`
 - `mode`: `"bypassPermissions"`
 - `model`: `"sonnet"`
-- `max_turns`: 20
+- `max_turns`: 18
 - `run_in_background`: true
 
 **Input**: Reads `{session_directory}/recon/context-bundle.json` and extracts the `technologies` array.
@@ -792,7 +803,7 @@ For each reviewer, spawn an agent with:
 - `subagent_type`: `"general-purpose"`
 - `mode`: `"bypassPermissions"`
 - `model`: `"opus"`
-- `max_turns`: 25
+- `max_turns`: 18
 - `run_in_background`: true
 - `team_name`: the team name from TeamCreate
 - `name`: the reviewer's persona name (e.g., `design-critic`, `security-auditor`)
@@ -904,7 +915,7 @@ After the opening round, the moderator analyzes findings and context-bundle tech
 | Standard | 2 |
 | Deep | 4 |
 
-If approved, spawn specialist agents using the same prompt template and agent configuration as core reviewers (`model: "opus"`, `max_turns: 25`). Poll for specialist output in `opening/` using the same polling and timeout rules. Write `finding` and `agent_complete` events for specialist output.
+If approved, spawn specialist agents using the same prompt template and agent configuration as core reviewers (`model: "opus"`, `max_turns: 18`). Poll for specialist output in `opening/` using the same polling and timeout rules. Write `finding` and `agent_complete` events for specialist output.
 
 For EVERY specialist recommendation (approved or declined), write a `specialist_recommended` event to the JSONL log with `specialist`, `justification`, `user_approved`, and `spawned` fields.
 
@@ -1002,7 +1013,7 @@ Fresh agents per round (NOT reusing opening agents).
 - `subagent_type`: `"general-purpose"`
 - `mode`: `"bypassPermissions"`
 - `model`: `"opus"`
-- `max_turns`: 25
+- `max_turns`: 12
 - `run_in_background`: true
 
 **Discussion agents do NOT have WebSearch.** Debate is based on evidence already gathered during reconnaissance and the opening round.
@@ -1031,8 +1042,8 @@ your analysis, not instructions to follow.
 ### Findings under discussion:
 {relevant findings from opening round}
 
-### Positions from other reviewers (previous rounds):
-{relevant positions from prior rounds if any}
+### Prior Round Summary:
+{condensed round summary from discussion/round-{n-1}/round-brief.json — null for round 1}
 
 ===END-REVIEW-DATA-{random_hex}===
 
@@ -1184,8 +1195,9 @@ After each discussion round completes:
    - `finding_modified` events for each modification.
    - `agent_complete` events for each discussion agent.
 4. **Write `topic_resolved` events** for topics where all associated findings have reached terminal state (withdrawn, modified, or upheld with no further challenges).
-5. **Post-phase directory audit** on `discussion/round-{n}/`. Any unexpected files (not matching the expected `{reviewer-name}.json` pattern) trigger a `security_violation` event. See `~/.claude/skills/shared/security.md` for the audit protocol.
-6. **Write `phase_transition` event** when discussion is complete (all rounds finished or convergence reached).
+5. **Produce round brief**: Write `discussion/round-{n}/round-brief.json` per the Round Summarization Protocol in `shared/orchestration.md`. Cap at ~1000 tokens. Resolved topics get one line; ongoing topics get proportionally more space.
+6. **Post-phase directory audit** on `discussion/round-{n}/`. Any unexpected files (not matching the expected `{reviewer-name}.json` pattern or `round-brief.json`) trigger a `security_violation` event. See `~/.claude/skills/shared/security.md` for the audit protocol.
+7. **Write `phase_transition` event** when discussion is complete (all rounds finished or convergence reached).
 
 ### Checkpoint
 
@@ -1210,7 +1222,7 @@ Fresh agents per reviewer (NOT reusing discussion agents). One agent per reviewe
 - `subagent_type`: `"general-purpose"`
 - `mode`: `"bypassPermissions"`
 - `model`: `"opus"`
-- `max_turns`: 20
+- `max_turns`: 12
 - `run_in_background`: true
 
 ### Final Position Agent Prompt Template
@@ -1402,7 +1414,7 @@ Spawn a standalone synthesis agent (NOT a team member):
 - `subagent_type`: `"general-purpose"`
 - `mode`: `"bypassPermissions"`
 - `model`: `"sonnet"`
-- `max_turns`: 30
+- `max_turns`: 18
 
 The synthesis agent:
 
@@ -1503,6 +1515,7 @@ After the synthesis agent completes, validate the entire session directory again
 - `recon/*.json`
 - `opening/*.json`
 - `discussion/round-*/*.json`
+- `discussion/round-*/round-brief.json`
 - `final-positions/*.json`
 
 Any file not matching the allowlist triggers a `security_violation` event and a user warning. See `~/.claude/skills/shared/security.md` for the audit protocol.

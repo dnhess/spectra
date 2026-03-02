@@ -33,15 +33,15 @@ teardown() { _common_teardown; }
 # Discussion template delimiter markers
 # ---------------------------------------------------------------------------
 
-@test "deep-design discussion template contains agent position delimiters" {
-  run grep -c "===BEGIN-AGENT-POSITIONS-" \
+@test "deep-design discussion template contains round summary delimiters" {
+  run grep -c "===BEGIN-ROUND-SUMMARY-" \
     "$PROJECT_ROOT/deep-design/SKILL.md"
   assert_success
   [[ "${output}" -ge 1 ]]
 }
 
-@test "decision-board discussion template contains agent position delimiters" {
-  run grep -c "===BEGIN-AGENT-POSITIONS-" \
+@test "decision-board discussion template contains round summary delimiters" {
+  run grep -c "===BEGIN-ROUND-SUMMARY-" \
     "$PROJECT_ROOT/decision-board/SKILL.md"
   assert_success
   [[ "${output}" -ge 1 ]]
@@ -124,4 +124,17 @@ teardown() { _common_teardown; }
     "$PROJECT_ROOT/code-review/SKILL.md"
   assert_success
   [[ "${output}" -ge 1 ]]
+}
+
+# ---------------------------------------------------------------------------
+# Round summarization protocol references
+# ---------------------------------------------------------------------------
+
+@test "all skills reference round-brief.json in discussion section" {
+  for skill in deep-design decision-board code-review; do
+    run grep -c "round-brief.json" \
+      "$PROJECT_ROOT/$skill/SKILL.md"
+    assert_success
+    [[ "${output}" -ge 1 ]]
+  done
 }
