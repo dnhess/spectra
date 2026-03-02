@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `interrupted` quality value for emergency shutdown sessions
 - Decision-board `session_end` extensions formally documented in event schemas
 - Test suites for context budget (15 tests) and quality KPIs (15 tests)
+- Code-review Phase 2 parity: context budget monitoring, quality KPIs, SQLite population, `specialist_recommended` event logging
+- Missing code-review event types added to event validator (`finding`, `finding_challenged`, `finding_upheld`, `finding_withdrawn`, `finding_modified`, `finding_merged`)
 
 ### Changed
 

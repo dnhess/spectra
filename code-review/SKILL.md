@@ -14,6 +14,16 @@ If you're reading this after context compression, check for an active session:
 3. Validate the session lock file has not expired
 4. Resume from the phase indicated in `session-state.md`
 
+### Context Budget Check (every phase transition)
+
+After recovering or during any normal phase transition:
+
+1. Count completed rounds from event log (`bash ~/.claude/skills/shared/tools/jsonl-utils.sh count-type {event_log} phase_transition`)
+2. Measure cumulative output: sum file sizes of all agent output JSON files read during the session
+3. Compare against tier thresholds (see `~/.claude/skills/shared/orchestration.md` > Context Budget Monitoring)
+4. Emit `context_budget_status` event with current metrics and active threshold level
+5. If CRITICAL or above after compaction: execute emergency shutdown protocol (see `~/.claude/skills/shared/orchestration.md` > Emergency Shutdown Protocol)
+
 If no active session exists, start fresh.
 
 ## Overview
@@ -659,7 +669,8 @@ After Phase 1 completes (scout finishes, and research finishes for Standard/Deep
    - `recon_complete` event (always)
    - `research_complete` event (Standard/Deep only)
    - `checkpoint_written` event
-3. **Show user summary**: Present the reconnaissance findings:
+3. **Context budget check**: Compute context budget metrics and emit a `context_budget_status` event. See `~/.claude/skills/shared/orchestration.md` > Context Budget Monitoring for metric computation and threshold details.
+4. **Show user summary**: Present the reconnaissance findings:
 
 ```
 --- Reconnaissance Complete ---
@@ -872,6 +883,8 @@ After the opening round, the moderator analyzes findings and context-bundle tech
 | Deep | 4 |
 
 If approved, spawn specialist agents using the same prompt template and agent configuration as core reviewers (`model: "opus"`, `max_turns: 25`). Poll for specialist output in `opening/` using the same polling and timeout rules. Write `finding` and `agent_complete` events for specialist output.
+
+For EVERY specialist recommendation (approved or declined), write a `specialist_recommended` event to the JSONL log with `specialist`, `justification`, `user_approved`, and `spawned` fields.
 
 ### Topic Extraction
 
@@ -1146,6 +1159,7 @@ After each discussion round, write a checkpoint to `session-state.md` using the 
 - Finding states (open, challenged, upheld, withdrawn, modified)
 - Topic states (open, resolved, deferred)
 - Convergence trigger (if discussion ended early)
+- Context budget status (metrics and threshold level from `context_budget_status` event)
 
 ## Phase 4: Final Positions
 
@@ -1238,6 +1252,7 @@ After final positions are collected, write a checkpoint to `session-state.md` us
 - Phase: `final-positions`
 - Per-reviewer final finding lists
 - Overall finding state summary (upheld, withdrawn, modified counts)
+- Context budget status (metrics and threshold level from `context_budget_status` event)
 
 ## Phase 5: Synthesis
 
@@ -1458,9 +1473,28 @@ Write the final `session_end` event to close the JSONL log:
   "findings_minor": 12,
   "findings_nit": 5,
   "findings_withdrawn": 2,
-  "composition_used": false
+  "composition_used": false,
+  "quality_kpis": {
+    "completion_rate": 0.857,
+    "phase_completion_rate": 1.0,
+    "security_violations_count": 0,
+    "convergence_rate": 0.80,
+    "specialist_utilization": 0.50,
+    "escalations_count": 1
+  }
 }
 ```
+
+After computing quality, compute quality KPIs from the event log:
+
+- `completion_rate`: count `agent_complete` events with `status=completed` / total `agent_complete` events
+- `phase_completion_rate`: count `phase_transition` events / planned phases for this tier
+- `security_violations_count`: count `security_violation` events
+- `convergence_rate`: count `topic_resolved` events (where status is `resolved` or `user_decided`) / count `topic_created` events
+- `specialist_utilization`: count `specialist_recommended` events (where `spawned=true`) / total `specialist_recommended` events
+- `escalations_count`: count `escalation` events
+
+Include the `quality_kpis` object in the `session_end` event. Use `null` for any metric with a 0/0 denominator.
 
 ### Present to User
 
@@ -1537,6 +1571,8 @@ source ~/.claude/skills/shared/tools/jsonl-utils.sh
 ```
 
 If the manifest file does not exist, create it.
+
+After writing the manifest entry, populate the SQLite `sessions` table row with quality KPIs using `bash ~/.claude/skills/shared/tools/db-utils.sh execute`: set `completion_rate`, `phase_completion_rate`, `security_violations_count`, `convergence_rate`, `specialist_utilization`, and `escalations_count` from the `quality_kpis` object computed in Phase 5.
 
 ### Manifest Size Management
 

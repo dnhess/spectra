@@ -43,6 +43,12 @@ KNOWN_TYPES = {
     # Domain events — code-review
     "recon_complete",
     "research_complete",
+    "finding",
+    "finding_challenged",
+    "finding_upheld",
+    "finding_withdrawn",
+    "finding_modified",
+    "finding_merged",
 }
 
 UUID_RE = re.compile(
