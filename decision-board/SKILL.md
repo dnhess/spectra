@@ -130,6 +130,16 @@ digraph decision_board {
 | **Standard** | Typical architectural decision, 2-3 options | 4-6 | 1-2 | 75% |
 | **Deep** | High-stakes, irreversible decisions | 6-8 | 2-3 | 80% |
 
+### Model Allocation
+
+| Agent | Quick | Standard | Deep |
+|---|---|---|---|
+| Opening/positioning agents | opus | opus | opus |
+| Discussion agents | N/A | sonnet | opus |
+| Final position agents | N/A | sonnet | sonnet |
+| adr-writer synthesis | sonnet | sonnet | sonnet |
+| debate-log-writer synthesis | sonnet | sonnet | sonnet |
+
 ### Tier Auto-Selection
 
 Auto-suggest based on decision signals:
@@ -396,7 +406,7 @@ For each selected agent, spawn using the Agent tool with:
 - `name`: the agent's role name (e.g., "pragmatist", "architect", "risk-assessor")
 - `subagent_type`: "general-purpose"
 - `mode`: "bypassPermissions"
-- `max_turns`: 20
+- `max_turns`: 18
 - `run_in_background`: true
 - `prompt`: Persona + project context + task (see opening round template below)
 

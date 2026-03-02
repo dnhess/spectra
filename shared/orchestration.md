@@ -136,8 +136,12 @@ conditionals. See Finding 5 design review session for full rationale.
 All agents are spawned as:
 - `subagent_type`: `"general-purpose"`
 - `mode`: `"bypassPermissions"` — required for file writes
-- `max_turns`: Phase-appropriate limit (typically 15-25 per agent)
+- `max_turns`: Phase-appropriate limit (typically 12-18 per agent)
 - `run_in_background`: `true` — agents run concurrently
+
+Model selection is skill-specific and tier-dependent. Each SKILL.md defines
+a Model Allocation table. Default: `opus` for analysis-heavy opening phases,
+`sonnet` for discussion, final positions, and synthesis.
 
 For discussion rounds, **spawn fresh agents** rather than reusing previous-round agents. Each round's agents receive:
 - The topics they're assigned to (from `topics.json`)

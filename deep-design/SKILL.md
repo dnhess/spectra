@@ -139,6 +139,16 @@ digraph deep_design {
 | **Standard** | 6-8 | 1 round | 5-10 min | Most design docs, architecture specs | Revised document |
 | **Deep** | 10-15 | 2-3 rounds | 10-20 min | Complex architecture, critical systems | Revised document |
 
+### Model Allocation
+
+| Agent | Quick | Standard | Deep |
+|---|---|---|---|
+| Opening agents | opus | opus | opus |
+| Discussion agents | N/A | sonnet | opus |
+| Final position agents | N/A | sonnet | sonnet |
+| doc-revision synthesis | sonnet | sonnet | sonnet |
+| log-generation synthesis | sonnet | sonnet | sonnet |
+
 ### Quick Tier: Design Doc Lint Pass
 
 The Quick tier is positioned as a **fast design doc lint pass** — the lowest-friction entry point to the review system. It trades depth for speed and cost.
@@ -386,7 +396,7 @@ For each selected agent, spawn using the Agent tool with:
 - `name`: the agent's role name (e.g., "fe-engineer", "security-expert")
 - `subagent_type`: "general-purpose"
 - `mode`: "bypassPermissions"
-- `max_turns`: 20
+- `max_turns`: 18
 - `run_in_background`: true
 - `prompt`: Persona + project context + task (see opening round template below)
 
