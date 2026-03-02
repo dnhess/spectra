@@ -63,6 +63,7 @@ for development from source. Add to `~/.claude/settings.json`:
       "Bash(mkdir -p ~/.spectra/sessions/*)",
       "Bash(bash ~/.spectra/bin/json-write.sh *)",
       "Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)",
+      "Bash(bash ~/.claude/skills/shared/tools/db-utils.sh *)",
       "Write(~/.spectra/sessions/**)",
       "Read(~/.spectra/sessions/**)",
       "Glob(~/.spectra/sessions/**)",
@@ -88,6 +89,14 @@ Agents ──(Write JSON file)──► Session Directory ◄──(Glob/Read)�
 - **No coordinator agent** — the moderator drives the session directly
 
 This replaces the previous hub-and-spoke coordinator pattern, eliminating message delivery failures and coordinator stalling.
+
+Additional infrastructure:
+
+- **Output validation** — 5-stage pipeline (size, JSON parse, schema, content sanitize, accept) validates all agent output before event log writes
+- **SQLite storage** — hybrid storage layer alongside JSONL manifests for cross-session metadata queries
+- **Context budget monitoring** — proxy metrics tracked at every phase transition with emergency shutdown when context pressure is critical
+- **Quality KPIs** — per-session metrics (completion rate, convergence, specialist utilization, etc.) computed at session end and stored in SQLite
+- **Skill composition** — skills can invoke other skills mid-session (e.g., deep-design invokes decision-board to resolve a deadlocked topic)
 
 ## Context Persistence
 
@@ -117,21 +126,25 @@ spectra/
   shared/                       # Shared orchestration library (not a skill)
     orchestration.md            # Blackboard protocol, polling, session management
     event-schemas-base.md       # Common event types across all skills
-    security.md                 # 3-layer defense, content isolation, audits
+    composition.md              # Skill composition protocol (inter-skill invocation)
+    security.md                 # 4-layer defense, content isolation, audits
     tools/
       jsonl-utils.sh            # JSONL query utility
+      db-utils.sh               # SQLite database utilities (WAL mode)
+      validate-output.sh        # 5-stage output validation pipeline
+    schemas/                    # JSON validation schemas for agent outputs
   deep-design/                  # Design review skill
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
-    personas/                   # 10 core + 8 specialist reviewers
+    personas/                   # 12 core + 10 specialist reviewers
   decision-board/               # Decision debate skill
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
-    personas/                   # 6 core + 6 specialist debaters
+    personas/                   # 7 core + 9 specialist debaters
   code-review/                  # Code review skill
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
-    personas/                   # Core + specialist reviewers
+    personas/                   # 6 core + 6 specialist reviewers
 ```
 
 ## Adding New Skills
@@ -149,4 +162,4 @@ To add a new multi-agent skill:
    - Add checkpoint timing appropriate for your session phases
 6. Add the skill name to `KNOWN_SKILLS` in `bin/spectra`
 
-The shared infrastructure handles: session directory management, polling protocol, JSONL event writing, synthesis pipeline, fault tolerance, security, and context persistence.
+The shared infrastructure handles: session directory management, polling protocol, JSONL event writing, output validation, synthesis pipeline, fault tolerance, context budget monitoring, quality KPIs, security, and context persistence.
