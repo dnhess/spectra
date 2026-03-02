@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `spectra doctor` now checks SQLite database health
 - Event schema version bumped from 1.0.0 to 1.1.0 (additive only)
 - `session_end` events include optional `quality_kpis` object
+- WebSearch Guidelines added to 8 agent prompt templates across all 3 skills (opening, discussion, final position, scout, devil's advocate)
+- Deep-design: added `### Final Position Agent Prompt Template` with schema (`final_observations` with `revised` flag + `key_positions`)
+- Code-review opening template: added file-read restriction and Prior Session Context placeholder
+- Code-review discussion template: added explicit WebSearch prohibition in Rules section
+- Code-review manifest: fixed stale `source` to `bash` for jsonl-utils.sh invocation
 
 ## [0.2.2] - 2026-03-01
 
