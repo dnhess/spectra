@@ -44,6 +44,31 @@ System recommends a domain specialist based on opening round findings.
 }
 ```
 
+### `specialist_recommended`
+
+Records the outcome of a specialist recommendation — whether the user approved it and whether it was spawned. Enables `specialist_utilization` KPI tracking.
+
+```json
+{
+  "event_id": "uuid",
+  "sequence_number": 4,
+  "schema_version": "1.1.0",
+  "type": "specialist_recommended",
+  "timestamp": "ISO-8601",
+  "specialist": "hipaa-compliance",
+  "justification": "Document describes PHI handling",
+  "user_approved": true,
+  "spawned": true
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `specialist` | String | Name of the recommended specialist |
+| `justification` | String | Why this specialist was recommended |
+| `user_approved` | Boolean | Whether the user approved the recommendation |
+| `spawned` | Boolean | Whether the specialist agent was actually spawned |
+
 ### `topic_created`
 
 A discussion topic extracted from opening round disagreements.
@@ -196,12 +221,27 @@ The `session_end` event (defined in shared base) includes these additional field
   "topics_resolved": 4,
   "topics_escalated": 1,
   "compositions_invoked": 0,
-  "topics_resolved_by_composition": 0
+  "topics_resolved_by_composition": 0,
+  "quality_kpis": {
+    "completion_rate": 0.857,
+    "phase_completion_rate": 1.0,
+    "security_violations_count": 0,
+    "convergence_rate": 0.80,
+    "specialist_utilization": 0.50,
+    "escalations_count": 1
+  }
 }
 ```
 
 - `compositions_invoked`: Number of skill compositions invoked during the session (0 or 1, max 1 per session).
 - `topics_resolved_by_composition`: Number of topics resolved via composition (subset of `topics_resolved`).
+- `quality_kpis`: Optional object (additive, schema 1.1.0) containing shared and domain-specific quality metrics. Shared KPIs are defined in `event-schemas-base.md`. Deep-design-specific KPI formulas:
+
+| Metric | Formula | Data Source | Edge Cases |
+|---|---|---|---|
+| `convergence_rate` | `count(topic_resolved WHERE status IN (resolved, user_decided)) / count(topic_created)` | Event log | 0 topics = null |
+| `specialist_utilization` | `count(specialist_recommended WHERE spawned=true) / count(specialist_recommended)` | Event log | 0 recommended = null |
+| `escalations_count` | `count(escalation)` | Event log | 0 is healthy |
 
 ## JSONL Write Semantics
 
