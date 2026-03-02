@@ -413,6 +413,9 @@ The moderator drives this phase directly:
 
 ### Opening Round Agent Prompt Template
 
+<!-- Template: Persona | Project Context | Prior Session Context (if available, SEMI-TRUSTED, delimited) |
+     Task + Schema | WebSearch Guidelines (base) | Rules. All content trusted except prior session handoff. -->
+
 ```
 {persona file contents}
 
@@ -505,6 +508,9 @@ The moderator drives discussion directly using fresh agents per round:
 
 **Checkpoint**: After processing each discussion round, write `session-state.md` per Persistence Protocol. Log `checkpoint_written` event. Standard and Deep tiers only.
 After writing the checkpoint, compute context budget metrics and emit a `context_budget_status` event. See `shared/orchestration.md` > Context Budget Monitoring for metric computation and threshold details.
+
+<!-- Template: Persona | Discussion Context | Prior Positions (UNTRUSTED, delimited) |
+     Task + Schema | WebSearch Guidelines (base) | Rules. Prior positions are agent-generated, untrusted. -->
 
 ### Discussion Agent Prompt Template
 
@@ -758,6 +764,9 @@ Once discussion concludes:
 3. **Write `session_complete` sentinel** to the JSONL event log with `final_sequence_number` set to the sentinel's own sequence number.
 
 4. **TeamDelete** — shut down the review team.
+
+<!-- Template: Inline instructions only | Task + Schema | Rules (reduced).
+     No persona, no agent positions. Reads moderator-curated synthesis-brief.json. WebSearch: Allowed (base). -->
 
 5. **Spawn 2 parallel standalone synthesis agents** (`general-purpose`, `mode: "bypassPermissions"` — standalone subagents, NOT team members):
 
