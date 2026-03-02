@@ -818,23 +818,22 @@ Schema:
 
    **adr-writer agent** (default model) receives:
    - The session directory path (to read `synthesis-brief.json` and `decision-events.jsonl`)
-   - The `~/.claude/skills/shared/tools/jsonl-utils.sh` path (for querying events)
-   - The `~/.claude/skills/decision-board/event-schemas.md` path and `~/.claude/skills/shared/event-schemas-base.md` path (for understanding event types)
    - The selected tier
    - The decision question and options
    - Instructions to:
-     a. Validate `session_complete` sentinel exists using `bash ~/.claude/skills/shared/tools/jsonl-utils.sh has-sentinel`
-     b. Read `synthesis-brief.json` as the primary input, with `decision-events.jsonl` for full context where needed
-     c. Produce `decision-record.md` in ADR format (see Output Format section)
-     d. Return ONLY a short summary (~15 lines max): recommended option, consensus strength, key conditions, dissent count
+     a. Read `synthesis-brief.json` as the primary input
+     b. Produce `decision-record.md` in ADR format (see Output Format section)
+     c. Return ONLY a short summary (~15 lines max): recommended option, consensus strength, key conditions, dissent count
+   - Write ONLY to `{session_directory}/decision-record.md`
+   - Do NOT read the JSONL event log directly — use `synthesis-brief.json`
 
    **debate-log-writer agent** (`model: "sonnet"`) receives:
    - The session directory path (to read `synthesis-brief.json` and `decision-events.jsonl`)
-   - The `~/.claude/skills/decision-board/event-schemas.md` path and `~/.claude/skills/shared/event-schemas-base.md` path (for understanding event types)
    - Instructions to:
      a. Read `synthesis-brief.json` and `decision-events.jsonl`
      b. Generate `debate-log.md` from the data (human-readable narrative format)
      c. Return a brief confirmation with log stats (agent count, round count, concession count)
+   - Write ONLY to `{session_directory}/debate-log.md`
 
    Both agents run in parallel.
 
