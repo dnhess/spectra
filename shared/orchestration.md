@@ -105,6 +105,32 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 | WebSearch Guidelines | Yes (base) | Yes (base) | Yes (base) | Yes (base) |
 | Rules | Yes | Yes | Yes | Yes (reduced) |
 
+### Prompt Content Trust Levels
+
+| Section | Content Source | Trust Level | Locked? |
+|---|---|---|---|
+| Persona | On-disk file | Trusted | Yes |
+| Project Context | CLAUDE.md + detection | Trusted | Yes |
+| Prior Session Context | Handoff file | Semi-trusted | Yes (sanitized + delimited) |
+| Prior Agent Positions | Agent output files | Untrusted | No (must use delimiters) |
+| Task + Schema | SKILL.md template | Trusted | Yes |
+| WebSearch Guidelines | SKILL.md template | Trusted | Yes |
+| Rules | SKILL.md template | Trusted | Yes |
+
+**Locked** = content determined at design time or session start, no agent-generated
+content. **Unlocked** = injects agent output, MUST use intra-session content
+isolation (see `shared/security.md`).
+
+### Deferral Trigger for Formal Tiering
+
+Formal prompt tiering is deferred unless EITHER:
+
+1. Context budget utilization exceeds 70% in Deep tier sessions
+2. A third skill is added to Spectra
+
+When triggered, use section-tagged markdown with CI validation — not runtime
+conditionals. See Finding 5 design review session for full rationale.
+
 ### Agent Spawning
 
 All agents are spawned as:

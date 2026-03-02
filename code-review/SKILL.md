@@ -432,6 +432,9 @@ The scout agent explores the review target and produces a structured context bun
 
 #### Scout Agent Prompt Template
 
+<!-- Template: Inline instructions | Project Context | Task + Schema |
+     WebSearch Guidelines (base) | Rules. No persona, no prior agent output. Trusted content only. -->
+
 ```
 You are a codebase scout for a code review session.
 
@@ -591,6 +594,9 @@ The research agent takes the detected technologies from the context bundle and s
 **Polling**: Glob for `{session_directory}/recon/research-brief.json`, timeout 60 seconds. Poll every ~10 seconds.
 
 #### Research Agent Prompt Template
+
+<!-- Template: Inline instructions | Scout brief (moderator-curated) | Task + Schema |
+     WebSearch Guidelines (enhanced) | Rules. Scout brief is moderator-curated, trusted. -->
 
 ```
 You are a technology research agent for a code review session.
@@ -785,6 +791,10 @@ For each reviewer, spawn an agent with:
 - `name`: the reviewer's persona name (e.g., `design-critic`, `security-auditor`)
 
 ### Opening Review Agent Prompt Template
+
+<!-- Template: Persona | Project Context | Prior Session Context (if available, SEMI-TRUSTED, delimited) |
+     Context Bundle + Research Brief | Task + Schema | WebSearch Guidelines (enhanced) | Rules.
+     All content trusted except prior session handoff. -->
 
 ```
 {persona file contents from ~/.claude/skills/code-review/personas/{reviewer-name}.md}
@@ -984,6 +994,9 @@ Fresh agents per round (NOT reusing opening agents).
 - `run_in_background`: true
 
 **Discussion agents do NOT have WebSearch.** Debate is based on evidence already gathered during reconnaissance and the opening round.
+
+<!-- Template: Persona | Discussion Context | Review Data (UNTRUSTED, delimited: findings + positions) |
+     Task + Schema | Rules. WebSearch: Prohibited (explicit opt-out). Prior review data is agent-generated. -->
 
 Full prompt template:
 
@@ -1189,6 +1202,9 @@ Fresh agents per reviewer (NOT reusing discussion agents). One agent per reviewe
 
 ### Final Position Agent Prompt Template
 
+<!-- Template: Persona | Discussion outcomes (curated by moderator) |
+     Task + Schema | WebSearch Guidelines (base) | Rules. Discussion outcomes are moderator-curated. -->
+
 ```
 {persona file contents from ~/.claude/skills/code-review/personas/{reviewer-name}.md}
 
@@ -1355,6 +1371,9 @@ Write a `session_complete` event to the JSONL log with `final_sequence_number` s
 ### TeamDelete
 
 Shut down the review team. Send `shutdown_request` messages to all active teammates, wait for confirmations, then call TeamDelete to clean up team resources. This happens before spawning the synthesis agent — synthesis is a standalone operation.
+
+<!-- Template: Inline instructions only | Task + Schema | Rules (reduced).
+     No persona, no agent positions. Reads moderator-curated synthesis-brief.json. WebSearch: Allowed (base). -->
 
 ### Spawn Synthesis Agent
 
