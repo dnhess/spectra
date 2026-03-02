@@ -93,9 +93,9 @@ This replaces the previous hub-and-spoke coordinator pattern, eliminating messag
 Additional infrastructure:
 
 - **Output validation** — 5-stage pipeline (size, JSON parse, schema, content sanitize, accept) validates all agent output before event log writes
-- **SQLite storage** — hybrid storage layer alongside JSONL manifests for cross-session metadata queries
+- **SQLite storage** (scaffolded, not yet wired) — hybrid storage layer alongside JSONL manifests for cross-session metadata queries. Schema, utilities, and tests exist but sessions do not yet populate the database. JSONL manifests are the active storage layer.
 - **Context budget monitoring** — proxy metrics tracked at every phase transition with emergency shutdown when context pressure is critical
-- **Quality KPIs** — per-session metrics (completion rate, convergence, specialist utilization, etc.) computed at session end and stored in SQLite
+- **Quality KPIs** — per-session metrics (completion rate, convergence, specialist utilization, etc.) computed at session end (SQLite population pending)
 - **Skill composition** — skills can invoke other skills mid-session (e.g., deep-design invokes decision-board to resolve a deadlocked topic)
 - **Round summarization** — moderator produces condensed ~1000-token round briefs between discussion rounds, replacing raw position injection and reducing token growth from O(agents^2 x rounds^2) to O(agents x rounds)
 - **Tier-based model allocation** — each skill defines per-tier model tables (opus for analysis-heavy opening phases, sonnet for discussion/synthesis)

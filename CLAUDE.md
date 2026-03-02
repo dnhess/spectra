@@ -11,16 +11,20 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
   - `orchestration.md` — Blackboard protocol, polling, session management
   - `event-schemas-base.md` — Common event types (session_start, phase_transition, agent_complete, session_complete, session_end, feedback, security_violation, composition_invoked, composition_completed)
   - `composition.md` — Skill composition protocol for inter-skill invocation mid-session
-  - `security.md` — 3-layer defense model, content isolation, directory audits
+  - `security.md` — 4-layer defense model, content isolation, directory audits
   - `tools/jsonl-utils.sh` — JSONL query utility (single copy, used by all skills)
 - `deep-design/` — Multi-perspective design review skill (v4.0)
   - `SKILL.md` — Full orchestration spec, references `shared/`
   - `event-schemas.md` — Domain events only (review, rebuttal, topic_created, etc.)
-  - `personas/` — 10 core + 8 specialist reviewer personas
+  - `personas/` — 12 core + 10 specialist reviewer personas
 - `decision-board/` — Structured decision debate skill (v2.0)
   - `SKILL.md` — Full orchestration spec, references `shared/`
   - `event-schemas.md` — Domain events only (stance, challenge, concession, etc.)
-  - `personas/` — 6 core + 6 specialist debater personas
+  - `personas/` — 7 core + 9 specialist debater personas
+- `code-review/` — Multi-perspective code review skill (v1.0)
+  - `SKILL.md` — Full orchestration spec, references `shared/`
+  - `event-schemas.md` — Domain events only (finding, finding_challenged, etc.)
+  - `personas/` — 6 core + 6 specialist reviewer personas
 
 ## Key Architecture Decisions
 
@@ -29,6 +33,7 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 - **Fresh agents per round**: Discussion/debate rounds spawn new agents rather than reusing previous ones. More expensive but guarantees delivery (avoids SendMessage failures).
 - **No cost tracking**: Platform doesn't expose token counts. Budget ceiling and cost snapshots were removed as non-functional.
 - **No heartbeat monitoring**: No timer mechanism in Claude Code. Replaced by file-existence polling with timeouts.
+- **SQLite is scaffolded, not active**: `shared/tools/db-utils.sh` is complete and tested (24 tests), and SKILL.md Phase 6 documents the `db_execute` call, but the moderator does not yet execute it. JSONL manifests are the sole working storage layer. The SQLite infrastructure is retained for future use (cross-session analytics, `spectra stats`, cross-skill queries). Do not remove it — wire it in when a concrete query need emerges.
 
 ## Conventions
 
