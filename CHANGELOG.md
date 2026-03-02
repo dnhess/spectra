@@ -51,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code-review opening template: added file-read restriction and Prior Session Context placeholder
 - Code-review discussion template: added explicit WebSearch prohibition in Rules section
 - Code-review manifest: fixed stale `source` to `bash` for jsonl-utils.sh invocation
+- Model allocation tables added to deep-design and decision-board; code-review flat table updated to tier-based
+- `max_turns` reduced: opening/scout/research 18, discussion 12, final position 12, synthesis 18
+- Cost Optimization Strategies section added to code-review (parity with deep-design and decision-board)
+- Shared orchestration: added model selection guidance in Agent Spawning section
 
 ## [0.2.2] - 2026-03-01
 
