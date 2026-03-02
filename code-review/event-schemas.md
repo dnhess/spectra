@@ -282,6 +282,31 @@ System recommends a domain specialist based on opening-round findings. For examp
 - `specialist` (string): The specialist persona identifier.
 - `justification` (string): Why this specialist is needed based on opening findings.
 
+### `specialist_recommended`
+
+Records the outcome of a specialist recommendation — whether the user approved it and whether it was spawned. Enables `specialist_utilization` KPI tracking.
+
+```json
+{
+  "event_id": "uuid",
+  "sequence_number": 4,
+  "schema_version": "1.1.0",
+  "type": "specialist_recommended",
+  "timestamp": "ISO-8601",
+  "specialist": "cryptography-specialist",
+  "justification": "Multiple findings reference custom encryption implementation in auth service",
+  "user_approved": true,
+  "spawned": true
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `specialist` | String | Name of the recommended specialist |
+| `justification` | String | Why this specialist was recommended |
+| `user_approved` | Boolean | Whether the user approved the recommendation |
+| `spawned` | Boolean | Whether the specialist agent was actually spawned |
+
 ### `topic_resolved`
 
 A discussion topic has been resolved or deferred.
@@ -410,7 +435,15 @@ The `session_end` event (defined in shared base) includes these additional field
   "findings_minor": 12,
   "findings_nit": 5,
   "findings_withdrawn": 2,
-  "composition_used": false
+  "composition_used": false,
+  "quality_kpis": {
+    "completion_rate": 0.857,
+    "phase_completion_rate": 1.0,
+    "security_violations_count": 0,
+    "convergence_rate": 0.80,
+    "specialist_utilization": 0.50,
+    "escalations_count": 1
+  }
 }
 ```
 
@@ -420,6 +453,13 @@ The `session_end` event (defined in shared base) includes these additional field
 - `findings_nit` (integer): Count of findings with `nit` severity in terminal state.
 - `findings_withdrawn` (integer): Count of findings that were withdrawn during discussion.
 - `composition_used` (boolean): Whether skill composition was invoked during the session.
+- `quality_kpis`: Optional object (additive, schema 1.1.0) containing shared and domain-specific quality metrics. Shared KPIs are defined in `event-schemas-base.md`. Code-review-specific KPI formulas:
+
+| Metric | Formula | Data Source | Edge Cases |
+|---|---|---|---|
+| `convergence_rate` | `count(topic_resolved WHERE status IN (resolved, user_decided)) / count(topic_created)` | Event log | 0 topics = null |
+| `specialist_utilization` | `count(specialist_recommended WHERE spawned=true) / count(specialist_recommended)` | Event log | 0 recommended = null |
+| `escalations_count` | `count(escalation)` | Event log | 0 is healthy |
 
 ## JSONL Write Semantics
 
@@ -438,6 +478,7 @@ The `session_end` event (defined in shared base) includes these additional field
 | **Full** | All selected agents completed their reviews AND all findings in terminal state (upheld, withdrawn, modified, or merged) |
 | **Partial** | At least `ceil(n/2)` agents completed AND at least 1 finding resolved |
 | **Minimal** | Above quorum (2 agents) but below Partial thresholds |
+| **interrupted** | Emergency shutdown — session halted by context pressure |
 
 Where `n` is the number of agents in `session_start.agents`. A finding is in "terminal state" when it has been upheld, withdrawn, modified, or merged. Unchallenged findings from the opening phase are implicitly upheld.
 

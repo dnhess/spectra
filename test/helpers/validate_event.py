@@ -21,20 +21,34 @@ KNOWN_TYPES = {
     "composition_completed",
     "checkpoint_written",
     "handoff_written",
+    "context_budget_status",
+    "emergency_checkpoint",
     # Domain events — deep-design
     "review",
     "specialist_request",
+    "specialist_recommended",
     "topic_created",
     "rebuttal",
     "pass",
     "topic_resolved",
+    "escalation",
+    "escalation_resolved",
+    "final_position",
     # Domain events — decision-board
     "stance",
     "challenge",
     "concession",
+    "consensus_check",
+    "decision_proposed",
     # Domain events — code-review
     "recon_complete",
     "research_complete",
+    "finding",
+    "finding_challenged",
+    "finding_upheld",
+    "finding_withdrawn",
+    "finding_modified",
+    "finding_merged",
 }
 
 UUID_RE = re.compile(
@@ -67,8 +81,8 @@ def validate(event):
         errors.append(f"sequence_number must be a positive integer, got: {seq}")
 
     # schema_version must be "1.0.0"
-    if event["schema_version"] != "1.0.0":
-        errors.append(f"schema_version must be '1.0.0', got: {event['schema_version']}")
+    if event["schema_version"] not in ("1.0.0", "1.1.0"):
+        errors.append(f"schema_version must be '1.0.0' or '1.1.0', got: {event['schema_version']}")
 
     # timestamp must be ISO-8601
     if not ISO8601_RE.match(str(event["timestamp"])):

@@ -64,11 +64,18 @@ conn.execute('''CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TEXT NOT NULL,
   description TEXT
 )''')
+now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 cursor = conn.execute('SELECT COUNT(*) FROM schema_migrations WHERE version = 1')
 if cursor.fetchone()[0] == 0:
     conn.execute(
         'INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?)',
-        (1, datetime.datetime.now(datetime.timezone.utc).isoformat(), 'Initial schema: sessions + schema_migrations')
+        (1, now, 'Initial schema: sessions + schema_migrations')
+    )
+cursor = conn.execute('SELECT COUNT(*) FROM schema_migrations WHERE version = 2')
+if cursor.fetchone()[0] == 0:
+    conn.execute(
+        'INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?)',
+        (2, now, 'Phase 2: context budget events, quality KPIs — event schema 1.1.0')
     )
 conn.commit()
 conn.close()

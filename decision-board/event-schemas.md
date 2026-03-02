@@ -215,6 +215,39 @@ An agent's final recommendation at the end of debate, with ranked assessment of 
 - `conditions` (array of strings): Conditions under which this recommendation holds.
 - `option_rankings` (array of objects): All options ranked from most to least preferred, with rationale for each.
 
+## Decision-Board `session_end` Extensions
+
+The `session_end` event (defined in shared base) includes these additional fields for decision-board:
+
+```json
+{
+  "consensus_strength": 0.78,
+  "rounds_debated": 2,
+  "concessions_count": 2,
+  "dissenting_agents_count": 1,
+  "quality_kpis": {
+    "completion_rate": 1.0,
+    "phase_completion_rate": 1.0,
+    "security_violations_count": 0,
+    "concessions_count": 2,
+    "consensus_strength": 0.78,
+    "rounds_debated": 2
+  }
+}
+```
+
+- `consensus_strength`: Final weighted consensus measurement from the last `consensus_check` or `decision_proposed` event.
+- `rounds_debated`: Number of debate rounds completed.
+- `concessions_count`: Number of position shifts during debate.
+- `dissenting_agents_count`: Number of agents who disagreed with the final recommendation.
+- `quality_kpis`: Optional object (additive, schema 1.1.0) containing shared and domain-specific quality metrics. Shared KPIs are defined in `event-schemas-base.md`. Decision-board-specific KPI formulas:
+
+| Metric | Formula | Data Source | Edge Cases |
+|---|---|---|---|
+| `concessions_count` | `count(concession)` | Event log | 0 may indicate entrenched positions |
+| `consensus_strength` | From last `consensus_check.consensus_strength` or `decision_proposed` | Event log | null if no consensus check |
+| `rounds_debated` | Count distinct rounds from challenge/concession events | Event log | 0 for Quick tier |
+
 ## Synthesis Brief Schema
 
 The moderator writes `synthesis-brief.json` to the session directory before the `session_complete` sentinel. The synthesis agents read this to produce the Architecture Decision Record (ADR).

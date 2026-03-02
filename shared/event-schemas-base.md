@@ -20,7 +20,7 @@ Response events SHOULD include `parent_event_id` referencing the event they resp
 
 Event schemas follow [Semantic Versioning](https://semver.org/):
 
-- **Current version**: `1.0.0`
+- **Current version**: `1.1.0`
 - **Minor version bump** (e.g., 1.0.0 to 1.1.0): Additive changes only — new optional fields on existing event types, new event types. Readers MUST ignore unknown fields. Writers MUST NOT remove or rename existing fields.
 - **Major version bump** (e.g., 1.x to 2.0.0): Breaking changes — removed fields, renamed fields, changed field types or semantics. Readers SHOULD reject events with an unrecognized major version rather than silently misinterpreting data.
 
@@ -36,6 +36,7 @@ Event schemas follow [Semantic Versioning](https://semver.org/):
 | Version | Date | Changes |
 |---|---|---|
 | 1.0.0 | 2026-02-28 | Initial schema — all base event types |
+| 1.1.0 | 2026-03-01 | Added context_budget_status, emergency_checkpoint events; quality_kpis on session_end; interrupted quality value |
 
 ## Common Event Types
 
@@ -122,12 +123,25 @@ Final summary event written by the moderator after synthesis agents complete.
   "schema_version": "1.0.0",
   "type": "session_end",
   "timestamp": "ISO-8601",
-  "quality": "Full | Partial | Minimal",
-  "agent_count": 10
+  "quality": "Full | Partial | Minimal | interrupted",
+  "agent_count": 10,
+  "quality_kpis": {
+    "completion_rate": 0.90,
+    "phase_completion_rate": 1.0,
+    "security_violations_count": 0
+  }
 }
 ```
 
 Additional skill-specific fields are added by each skill (e.g., `topics_total` for deep-design, `consensus_strength` for decision-board).
+
+The `quality_kpis` object is optional (additive, schema 1.1.0). Each skill extends this object with domain-specific KPIs. Shared KPI formulas:
+
+| Metric | Formula | Data Source | Edge Cases |
+|---|---|---|---|
+| `completion_rate` | `count(agent_complete WHERE status=completed) / count(agent_complete)` | Event log | 0/0 = null |
+| `phase_completion_rate` | `count(phase_transition) / phases_planned` | Event log + session config | Interrupted: use phases completed at interruption |
+| `security_violations_count` | `count(security_violation)` | Event log | 0 is expected |
 
 ### `feedback`
 
@@ -272,6 +286,100 @@ Records that a session handoff file was generated. Counts are derived from `synt
 | `unresolved_items` | Integer | Count of unresolved/deferred items from `synthesis-brief.json` |
 | `followup_recommendations` | Integer | Count of follow-up recommendations |
 
+### `context_budget_status`
+
+Emitted at every phase transition to track proxy metrics for context window pressure. Part of the measurement-only context budget monitoring system (see `shared/orchestration.md` > Context Budget Monitoring).
+
+```json
+{
+  "event_id": "uuid",
+  "session_id": "session-id",
+  "sequence_number": 9,
+  "schema_version": "1.1.0",
+  "type": "context_budget_status",
+  "timestamp": "ISO-8601",
+  "phase": "discussion_round_3",
+  "metrics": {
+    "rounds_completed": 3,
+    "cumulative_output_kb": 127.4,
+    "agents_spawned": 15,
+    "moderator_output_kb": 42.1
+  },
+  "active_threshold": "none | warning | caution | critical",
+  "tier_limits": { "max_rounds": 5, "max_output_kb": 300 },
+  "action_taken": "logged | checkpoint_written | reduce_agents | force_final"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `phase` | String | Current phase when status was computed |
+| `metrics.rounds_completed` | Integer | Number of discussion/debate rounds completed so far |
+| `metrics.cumulative_output_kb` | Float | Total size of all agent output JSON files read by moderator (KB) |
+| `metrics.agents_spawned` | Integer | Total number of agents spawned across all phases |
+| `metrics.moderator_output_kb` | Float | Estimated size of moderator's own output (event log + checkpoints) in KB |
+| `active_threshold` | String | Current threshold level: `none`, `warning`, `caution`, or `critical` |
+| `tier_limits` | Object | The tier-specific limits being measured against |
+| `action_taken` | String | Action taken at this threshold level (measurement-only for first 20 sessions) |
+
+### `emergency_checkpoint`
+
+Written when context pressure reaches critical levels or compaction is detected. Contains structured recovery state enabling session resumption after restart.
+
+```json
+{
+  "event_id": "uuid",
+  "session_id": "session-id",
+  "sequence_number": 42,
+  "schema_version": "1.1.0",
+  "type": "emergency_checkpoint",
+  "timestamp": "ISO-8601",
+  "phase": "discussion",
+  "sub_step": "polling_round_3",
+  "recovery_state": {
+    "resume_phase": "discussion",
+    "resume_round": 3,
+    "resume_step": "polling",
+    "completed_agents": [
+      { "agent_id": "arch", "output_path": "discussion/round-3/arch.json", "processing_status": "consumed" }
+    ],
+    "pending_agents": [
+      { "agent_id": "perf", "expected_output_path": "discussion/round-3/perf.json", "assigned_topics": ["T001"] }
+    ],
+    "event_log_sequence_number": 42,
+    "session_config": {
+      "tier": "deep",
+      "agent_roster": ["arch", "sec", "perf"],
+      "phase_plan": ["opening", "discussion", "final_positions", "synthesis"]
+    },
+    "checkpoint_reason": "context_budget_critical | compaction_detected",
+    "context_budget_at_checkpoint": {
+      "rounds_completed": 3,
+      "cumulative_output_kb": 287.5,
+      "agents_spawned": 18
+    },
+    "security_violations_active": false
+  },
+  "recovery_context": "Human-readable context string for supplementary information"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `phase` | String | Phase active when emergency was triggered |
+| `sub_step` | String | Specific sub-step within the phase |
+| `recovery_state.resume_phase` | String | Phase to resume from |
+| `recovery_state.resume_round` | Integer | Round number to resume from (if applicable) |
+| `recovery_state.resume_step` | String | Step within the phase to resume from |
+| `recovery_state.completed_agents` | Array | Agents whose output has been consumed |
+| `recovery_state.pending_agents` | Array | Agents that were in-flight or expected |
+| `recovery_state.event_log_sequence_number` | Integer | Last sequence number written to event log |
+| `recovery_state.session_config` | Object | Session configuration for reconstruction |
+| `recovery_state.checkpoint_reason` | String | Why the emergency checkpoint was triggered |
+| `recovery_state.context_budget_at_checkpoint` | Object | Budget metrics at time of checkpoint |
+| `recovery_state.security_violations_active` | Boolean | Whether any security violations were active |
+| `recovery_context` | String | Human-readable supplementary context |
+
 ## Cross-Session Manifest Base Schema
 
 Every manifest entry MUST include these common fields. Domain-specific fields are defined in each skill's `event-schemas.md`.
@@ -323,5 +431,6 @@ Every manifest entry MUST include these common fields. Domain-specific fields ar
 | **Full** | All selected agents completed all phases AND all domain-specific completeness criteria met |
 | **Partial** | At least `ceil(n/2)` agents completed AND minimum domain-specific criteria met |
 | **Minimal** | Above quorum (2 agents) but below Partial thresholds |
+| **interrupted** | Emergency shutdown — session halted by context pressure, checkpoint enables recovery |
 
 Where `n` is the number of agents in `session_start.agents`. Domain-specific completeness criteria are defined in each skill's SKILL.md.
