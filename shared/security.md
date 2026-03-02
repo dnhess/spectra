@@ -130,9 +130,10 @@ Generate `{random_hex}` as 8 random hex characters per round.
 
 Applies to:
 
-- deep-design discussion templates (prior reviewer positions)
-- decision-board discussion + Devil's Advocate templates (stances, challenges)
-- code-review discussion templates (findings, prior reviewer positions)
+- deep-design discussion templates (condensed round summary via `ROUND-SUMMARY` delimiters)
+- decision-board discussion templates (condensed round summary via `ROUND-SUMMARY` delimiters)
+- decision-board Devil's Advocate template (stances via `AGENT-STANCES` delimiters)
+- code-review discussion templates (findings + condensed summary via `REVIEW-DATA` delimiters)
 
 Does NOT apply to:
 
