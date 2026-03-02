@@ -422,6 +422,9 @@ The moderator drives this phase directly:
 
 ### Opening Round Agent Prompt Template
 
+<!-- Template: Persona | Project Context | Prior Session Context (if available, SEMI-TRUSTED, delimited) |
+     Task + Schema | WebSearch Guidelines (base) | Rules. All content trusted except prior session handoff. -->
+
 ```
 {persona file contents}
 
@@ -465,6 +468,9 @@ Schema:
 - Use python3 for JSON serialization: python3 -c "import json; ..."
 - After writing your file, you are done — do not wait for further instructions
 ```
+
+<!-- Template: Persona | Project Context | Other Stances (UNTRUSTED, delimited) |
+     Task + Schema | WebSearch Guidelines (base) | Rules. Stances are agent-generated, untrusted. -->
 
 ### Devil's Advocate Prompt Template
 
@@ -553,6 +559,9 @@ The moderator drives debate directly using fresh agents per round:
 
 **Checkpoint**: After processing each debate round, write `session-state.md` with updated stance distributions and consensus strength per Persistence Protocol. Log `checkpoint_written` event. Standard and Deep tiers only.
 After writing the checkpoint, compute context budget metrics and emit a `context_budget_status` event. See `shared/orchestration.md` > Context Budget Monitoring for metric computation and threshold details.
+
+<!-- Template: Persona | Prior Round Data (UNTRUSTED, delimited: stances + disagreements + challenges) |
+     Task + Schema | WebSearch Guidelines (base) | Rules. All prior round data is agent-generated, untrusted. -->
 
 ### Discussion Agent Prompt Template
 
@@ -717,6 +726,9 @@ Once debate concludes:
 
 1. **Spawn final-position agents** in parallel, each instructed to write to `final-positions/{agent-name}.json`. Poll for files, read results. Before writing `final_position` events, validate each file: `bash ~/.claude/skills/shared/tools/validate-output.sh <file> final-positions decision-board --warn-only`. Log validation warnings but continue processing in warn-only mode.
 
+<!-- Template: Persona | Debate Summary (curated by moderator) |
+     Task + Schema | WebSearch Guidelines (base) | Rules. Debate summary is moderator-curated. -->
+
 ### Final Position Agent Prompt Template
 
 ```
@@ -813,6 +825,9 @@ Schema:
 4. **Write `session_complete` sentinel** to the JSONL event log with `final_sequence_number` set to the sentinel's own sequence number.
 
 5. **TeamDelete** — shut down the debate team.
+
+<!-- Template: Inline instructions only | Task + Schema | Rules (reduced).
+     No persona, no agent positions. Reads moderator-curated synthesis-brief.json. WebSearch: Allowed (base). -->
 
 6. **Spawn 2 parallel standalone synthesis agents** (`general-purpose`, `mode: "bypassPermissions"` — standalone subagents, NOT team members):
 
