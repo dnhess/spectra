@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README and CLAUDE.md: clarified SQLite status as scaffolded/not yet wired (JSONL manifests are the active storage layer)
+- CLAUDE.md: fixed security.md layer count (3 → 4), updated persona counts, added missing code-review skill to Structure section
+
 ## [0.3.0] - 2026-03-02
 
 ### Added
