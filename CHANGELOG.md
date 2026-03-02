@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Discussion/debate templates: prior-round agent positions now wrapped in randomized delimiters for intra-session content isolation
 - Layer 3 enforcement boundary documented as moderator-enforced via validate-output.sh
 - Layer 4 WebSearch scope updated to all agents via base template (skills opt out specific types)
+- Synthesis agents: removed direct JSONL log access from doc-revision and adr-writer (rely on synthesis-brief.json)
+- Synthesis agents: added explicit write-path constraints to all synthesis agents across all skills
 - Skill SKILL.md files now reference shared failure mode table instead of inline recovery descriptions
 - Agent output files validated through unified pipeline before event log writes (warn-only in Phase 1)
 - `spectra doctor` now checks SQLite database health

@@ -763,20 +763,19 @@ Once discussion concludes:
 
    **doc-revision agent** (default model) receives:
    - The original document path
-   - The session directory path (to read `synthesis-brief.json` and `review-events.jsonl`)
-   - The `jsonl-utils.sh` path (for querying events)
-   - The `event-schemas.md` path (for understanding event types)
+   - The session directory path (to read `synthesis-brief.json`)
+   - `Write ONLY to {session_directory}/revised-document.md`
+   - `Do NOT read the JSONL event log directly — use synthesis-brief.json`
    - Key discussion resolutions that MUST be reflected in the revised document
    - The selected tier (to determine output format — checklist for Quick, revised doc for Standard/Deep)
    - Instructions to:
-     a. Validate `session_complete` sentinel exists using `bash {jsonl_utils_path} has-sentinel`
-     b. Read `synthesis-brief.json` as the primary input, with `review-events.jsonl` for full context where needed
-     c. Produce `revised-document.md` with change attribution (or prioritized checklist for Quick tier)
-     d. Return ONLY a short change summary (~15 lines max) listing what changed, who drove it, and severity
+     a. Read `synthesis-brief.json` as the primary input
+     b. Produce `revised-document.md` with change attribution (or prioritized checklist for Quick tier)
+     c. Return ONLY a short change summary (~15 lines max) listing what changed, who drove it, and severity
 
    **log-generation agent** (`model: "sonnet"`) receives:
    - The session directory path (to read `synthesis-brief.json` and `review-events.jsonl`)
-   - The `event-schemas.md` path (for understanding event types)
+   - `Write ONLY to {session_directory}/discussion-log.md`
    - Instructions to:
      a. Read `synthesis-brief.json` and `review-events.jsonl`
      b. Generate `discussion-log.md` from the data (human-readable narrative format)

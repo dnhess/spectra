@@ -1370,6 +1370,7 @@ The synthesis agent:
 1. **Validates** `session_complete` sentinel exists in the JSONL log.
 2. **Reads** `synthesis-brief.json` as its primary input.
 3. **Produces** `{session_directory}/review-findings.md` with the structure below.
+4. **Write ONLY to `{session_directory}/review-findings.md`** — no other files or directories.
 
 ### Standard Tier and Deep Tier Output Format
 
