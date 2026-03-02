@@ -71,3 +71,57 @@ teardown() { _common_teardown; }
   assert_success
   [[ "${output}" -ge 1 ]]
 }
+
+# ---------------------------------------------------------------------------
+# WebSearch Guidelines in skill templates
+# ---------------------------------------------------------------------------
+
+@test "deep-design templates contain WebSearch Guidelines" {
+  run grep -c "## WebSearch Guidelines" \
+    "$PROJECT_ROOT/deep-design/SKILL.md"
+  assert_success
+  [[ "${output}" -ge 3 ]]
+}
+
+@test "decision-board templates contain WebSearch Guidelines" {
+  run grep -c "## WebSearch Guidelines" \
+    "$PROJECT_ROOT/decision-board/SKILL.md"
+  assert_success
+  [[ "${output}" -ge 4 ]]
+}
+
+@test "code-review templates contain WebSearch Guidelines" {
+  run grep -c "## WebSearch Guidelines" \
+    "$PROJECT_ROOT/code-review/SKILL.md"
+  assert_success
+  [[ "${output}" -ge 3 ]]
+}
+
+# ---------------------------------------------------------------------------
+# Deep-design final position template
+# ---------------------------------------------------------------------------
+
+@test "deep-design has Final Position Agent Prompt Template" {
+  run grep -c "### Final Position Agent Prompt Template" \
+    "$PROJECT_ROOT/deep-design/SKILL.md"
+  assert_success
+  [[ "${output}" -ge 1 ]]
+}
+
+# ---------------------------------------------------------------------------
+# Code-review file-read restriction coverage
+# ---------------------------------------------------------------------------
+
+@test "code-review has file-read restriction in 3+ templates" {
+  run grep -c "Do NOT read sensitive system files" \
+    "$PROJECT_ROOT/code-review/SKILL.md"
+  assert_success
+  [[ "${output}" -ge 3 ]]
+}
+
+@test "code-review discussion template has WebSearch prohibition in Rules" {
+  run grep -c "Do NOT use WebSearch" \
+    "$PROJECT_ROOT/code-review/SKILL.md"
+  assert_success
+  [[ "${output}" -ge 1 ]]
+}
