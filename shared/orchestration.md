@@ -300,6 +300,69 @@ When reading `session-state.md` after compaction, validate the checkpoint before
 3. If validation fails, fall back to event log replay: re-read the JSONL event log and reconstruct state from events
 4. Log a `checkpoint_validation_failed` warning if fallback is triggered
 
+### Context Budget Monitoring
+
+The moderator tracks proxy metrics for context window pressure at every phase transition. Direct token count APIs are unavailable, so these heuristics approximate context consumption.
+
+#### Proxy Metrics
+
+| Metric | How Computed | Why |
+|---|---|---|
+| `rounds_completed` | Count from event log (`count-type phase_transition`) | Each round adds agent outputs + moderator processing to context |
+| `cumulative_output_kb` | Sum file sizes of all agent output JSON files read | Agent output is the largest context contributor |
+| `agents_spawned` | Running count maintained by moderator | More agents = more output to process |
+| `moderator_output_kb` | Estimate from event log file size + checkpoint sizes | Moderator's own output contributes to context pressure |
+
+#### Threshold Table
+
+| Threshold | Trigger | Action |
+|---|---|---|
+| **Warning** (~60%) | 3+ rounds completed | Log `context_budget_status`, write checkpoint |
+| **Caution** (~75%) | 5+ rounds OR output > tier KB limit | Reduce agents, skip optional phases |
+| **Critical** (~85%) | Metrics substantially exceed caution | Force final-positions, skip remaining discussion |
+| **Emergency** | Compaction detected (SKILL.md sentinel) | Execute emergency shutdown protocol |
+
+#### Tier-Specific Limits
+
+Initial thresholds, subject to calibration after 20+ real sessions:
+
+| Tier | Max rounds before caution | Max cumulative output (KB) |
+|---|---|---|
+| Quick | 1 | 50 |
+| Standard | 3 | 150 |
+| Deep | 5 | 300 |
+
+**Calibration notice**: Thresholds are **measurement-only** for the first 20 sessions. Emit `context_budget_status` events at every phase transition but do NOT enforce actions (always set `action_taken: "logged"`). After calibrating against real session data, enforcement will be enabled in a future phase.
+
+#### Metric Computation
+
+At each phase transition (after writing the checkpoint), the moderator:
+
+1. Counts completed rounds from the event log using `jsonl-utils.sh count-type`
+2. Sums file sizes of all agent output JSON files read during the session
+3. Increments the running agent spawn count
+4. Estimates moderator output from event log file size
+5. Compares metrics against the tier-specific threshold table
+6. Emits a `context_budget_status` event (see `event-schemas-base.md`)
+
+#### Integration with Checkpoints
+
+Budget status is checked at the same points where `checkpoint_written` events are emitted (existing checkpoint cadence). The `context_budget_status` event is written immediately after the `checkpoint_written` event at each phase transition.
+
+### Emergency Shutdown Protocol
+
+When context pressure reaches critical levels or the SKILL.md compaction sentinel detects compaction, the moderator executes an emergency shutdown:
+
+1. **Detect trigger**: Either proxy metrics reach `critical` threshold, or the SKILL.md compaction sentinel check fails (indicating context was compacted and recovery information may be incomplete)
+2. **Write `emergency_checkpoint` event** with structured `recovery_state` containing all information needed to resume the session (see `event-schemas-base.md`)
+3. **Augment `session-state.md`** with an `## Emergency Shutdown` section documenting the reason, metrics at shutdown, and recovery instructions
+4. **Write `session_end` event** with `quality: "interrupted"`
+5. **Attempt `TeamDelete`** if a team is active — best-effort, do not block on failure
+6. **Write partial handoff** if synthesis data is available (any completed phases produce useful data)
+7. **Clean up**: Delete the session lock file but leave the `.active-{skill}-session` sentinel (for recovery discovery)
+
+The `recovery_state` in the `emergency_checkpoint` event is the primary recovery mechanism. Future sessions or manual recovery can read this structured state to resume from the exact point of interruption.
+
 ### Active Session Sentinel
 
 To make session directories discoverable after context compaction, the moderator writes a sentinel file at session start:
@@ -553,6 +616,7 @@ These failures halt the session immediately. The moderator saves whatever partia
 | Session directory inaccessible | Moderator cannot create or write to session dir | Immediate failure, inform user | None (cannot write events) | No |
 | Event log write failure (persistent) | Python3 write raises exception on retry | Halt session, partial results may exist in agent files only | None (log unavailable) | No |
 | Disk full | `OSError: [Errno 28]` on any file write | Halt session, inform user to free disk space | None (cannot write) | No |
+| Emergency shutdown (compaction) | Compaction sentinel check fails in SKILL.md | Write emergency_checkpoint, session_end with interrupted | `emergency_checkpoint` + `session_end` | No |
 
 #### P1 — Degraded-but-Continuing
 
@@ -566,7 +630,7 @@ These failures degrade session quality but do not halt it. The session continues
 | Wrong-path write | Post-phase directory audit detects file outside phase allowlist | Log violation, exclude file from processing | `security_violation` with `type: "unexpected_file"` or `"path_escape"` | No |
 | Content injection detected | `validate-output.sh` content sanitization stage flags patterns | Exclude agent data from synthesis, continue with remaining agents | `security_violation` with `type: "content_injection"` | No |
 | Synthesis agent failure | No output file after synthesis agent timeout | Re-spawn synthesis agent once; if second failure, produce partial output | `agent_complete` with `status: "timeout"` | Once |
-| Context budget breach | Moderator detects prompt size exceeds tier budget before agent spawn | Reduce agent count or truncate context; log warning | `phase_transition` with `degraded: true` | No |
+| Context budget breach | `context_budget_status` level reaches `caution` or `critical` | Reduce agent count or truncate context; log warning | `context_budget_status` | No |
 
 #### P2 — Recoverable
 
