@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-02
+
 ### Added
 
 - Round Summarization Protocol in `shared/orchestration.md` — moderator-produced `round-brief.json` replaces raw position injection, converting O(agents^2 x rounds^2) token growth to O(agents x rounds)

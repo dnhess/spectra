@@ -97,6 +97,8 @@ Additional infrastructure:
 - **Context budget monitoring** — proxy metrics tracked at every phase transition with emergency shutdown when context pressure is critical
 - **Quality KPIs** — per-session metrics (completion rate, convergence, specialist utilization, etc.) computed at session end and stored in SQLite
 - **Skill composition** — skills can invoke other skills mid-session (e.g., deep-design invokes decision-board to resolve a deadlocked topic)
+- **Round summarization** — moderator produces condensed ~1000-token round briefs between discussion rounds, replacing raw position injection and reducing token growth from O(agents^2 x rounds^2) to O(agents x rounds)
+- **Tier-based model allocation** — each skill defines per-tier model tables (opus for analysis-heavy opening phases, sonnet for discussion/synthesis)
 
 ## Context Persistence
 
