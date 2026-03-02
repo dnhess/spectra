@@ -17,12 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema versioning contract in `shared/event-schemas-base.md` with semantic versioning rules and compatibility guarantees
 - SQLite integrity check in `spectra doctor`
 - Test suites for db-utils (17 tests), validation pipeline (23 tests), and failure modes (13 tests)
+- Context budget monitoring with proxy metrics at every phase transition (measurement-only)
+- Emergency shutdown protocol with structured `recovery_state` in both SKILL.md files
+- `context_budget_status` and `emergency_checkpoint` event types in shared event schemas
+- Quality KPI computation (`completion_rate`, `phase_completion_rate`, `security_violations_count`) for all skills
+- Deep-design KPIs: `convergence_rate`, `specialist_utilization`, `escalations_count`
+- Decision-board KPIs: `concessions_count`, `consensus_strength`, `rounds_debated`
+- `specialist_recommended` event type for deep-design specialist tracking
+- Quality KPI population in SQLite sessions table at session end
+- `interrupted` quality value for emergency shutdown sessions
+- Decision-board `session_end` extensions formally documented in event schemas
+- Test suites for context budget (15 tests) and quality KPIs (15 tests)
 
 ### Changed
 
 - Skill SKILL.md files now reference shared failure mode table instead of inline recovery descriptions
 - Agent output files validated through unified pipeline before event log writes (warn-only in Phase 1)
 - `spectra doctor` now checks SQLite database health
+- Event schema version bumped from 1.0.0 to 1.1.0 (additive only)
+- `session_end` events include optional `quality_kpis` object
 
 ## [0.2.2] - 2026-03-01
 
