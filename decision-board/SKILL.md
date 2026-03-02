@@ -23,6 +23,16 @@ If your context seems incomplete (you don't remember the session setup, agents, 
 4. If checkpoint is invalid, replay `decision-events.jsonl` to reconstruct state
 5. Resume from the indicated phase
 
+### Context Budget Check (every phase transition)
+
+After recovering or during any normal phase transition:
+
+1. Count completed rounds from event log (`bash ~/.claude/skills/shared/tools/jsonl-utils.sh count-type {event_log} phase_transition`)
+2. Measure cumulative output: sum file sizes of all agent output JSON files read during the session
+3. Compare against tier thresholds (see `~/.claude/skills/shared/orchestration.md` > Context Budget Monitoring)
+4. Emit `context_budget_status` event with current metrics and active threshold level
+5. If CRITICAL or above after compaction: execute emergency shutdown protocol (see `~/.claude/skills/shared/orchestration.md` > Emergency Shutdown Protocol)
+
 ### Success Metrics
 
 Track these outcome-based metrics in the cross-session manifest to measure whether debates deliver value:
@@ -407,6 +417,7 @@ The moderator drives this phase directly:
 4. **When all files arrive** (or timeout at 120s): read each file. Before writing events, validate each file through the unified validation pipeline: `bash ~/.claude/skills/shared/tools/validate-output.sh <file> opening decision-board --warn-only`. In Phase 1 (warn-only mode), log any validation warnings but continue processing. See `shared/orchestration.md` > Output Validation for failure handling.
 5. **Post-phase directory audit**: Snapshot the session directory before and after the phase. Any unexpected files are flagged as a `security_violation` event.
 6. **Write checkpoint**: Write `session-state.md` with stance distribution per Persistence Protocol. Log `checkpoint_written` event.
+   After writing the checkpoint, compute context budget metrics and emit a `context_budget_status` event. See `shared/orchestration.md` > Context Budget Monitoring for metric computation and threshold details.
 7. **Present stance distribution to user** with interactive options
 
 ### Opening Round Agent Prompt Template
@@ -533,6 +544,7 @@ The moderator drives debate directly using fresh agents per round:
 8. **Present round summary to user**
 
 **Checkpoint**: After processing each debate round, write `session-state.md` with updated stance distributions and consensus strength per Persistence Protocol. Log `checkpoint_written` event. Standard and Deep tiers only.
+After writing the checkpoint, compute context budget metrics and emit a `context_budget_status` event. See `shared/orchestration.md` > Context Budget Monitoring for metric computation and threshold details.
 
 ### Discussion Agent Prompt Template
 
@@ -683,6 +695,7 @@ If no option has more than one vote, `consensus_option` is `null` and `consensus
 Once debate concludes:
 
 0. **Write checkpoint**: Write `session-state.md` with final stance distributions per Persistence Protocol before spawning final-position agents. Log `checkpoint_written` event. Standard and Deep tiers only.
+   After writing the checkpoint, compute context budget metrics and emit a `context_budget_status` event. See `shared/orchestration.md` > Context Budget Monitoring for metric computation and threshold details.
 
 1. **Spawn final-position agents** in parallel, each instructed to write to `final-positions/{agent-name}.json`. Poll for files, read results. Before writing `final_position` events, validate each file: `bash ~/.claude/skills/shared/tools/validate-output.sh <file> final-positions decision-board --warn-only`. Log validation warnings but continue processing in warn-only mode.
 
@@ -813,6 +826,16 @@ Schema:
    - Offending files are NOT included in the final output presentation
 
 8. **Write `session_end` event** to `decision-events.jsonl` with final metrics (quality computed per formula in event-schemas.md, using metrics from the synthesis brief and synthesis agents' return summaries).
+
+   After computing quality, compute quality KPIs from the event log:
+   - `completion_rate`: count `agent_complete` events with `status=completed` / total `agent_complete` events
+   - `phase_completion_rate`: count `phase_transition` events / planned phases for this tier
+   - `security_violations_count`: count `security_violation` events
+   - `concessions_count`: count `concession` events
+   - `consensus_strength`: from the last `consensus_check` or `decision_proposed` event's `consensus_strength` field
+   - `rounds_debated`: count distinct rounds from `challenge` and `concession` events
+
+   Include the `quality_kpis` object in the `session_end` event. Use `null` for any metric with a 0/0 denominator. Also include `consensus_strength`, `rounds_debated`, `concessions_count`, and `dissenting_agents_count` as top-level fields on the `session_end` event per the decision-board extensions schema.
 
 9. **Present to user** using the appropriate terminal state message:
 
@@ -995,6 +1018,7 @@ Team teardown (TeamDelete) already happened in Phase 5 step 5. This phase handle
 3. Remove the `session.lock` file
 4. **Generate handoff**: Write `handoff.md` per Persistence Protocol (`~/.claude/skills/shared/orchestration.md` > Session Handoff). Content mapping: Debate Outcome from `synthesis-brief.json` recommended option and consensus strength, Decisions Made from concessions and position shifts, Unresolved from dissenting views to revisit. Log `handoff_written` event.
 5. Write an entry to the cross-session manifest (see below). Set `has_handoff: true` and `session_dirname` to the leaf directory name.
+   After writing the manifest entry, populate the SQLite `sessions` table row with quality KPIs using `bash ~/.claude/skills/shared/tools/db-utils.sh execute`: set `completion_rate`, `phase_completion_rate`, `security_violations_count`, `concessions_count`, `consensus_strength`, and `rounds_debated` from the `quality_kpis` object computed in Phase 5.
 6. **Delete sentinel**: Remove `~/.spectra/.active-decision-board-session`.
 
 ### Cross-Session Manifest
