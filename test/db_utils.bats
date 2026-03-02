@@ -154,7 +154,7 @@ print('OK')
   run bash "$PROJECT_ROOT/shared/tools/db-utils.sh" integrity
   assert_success
   assert_output --partial '"integrity": "ok"'
-  assert_output --partial '"schema_version": 1'
+  assert_output --partial '"schema_version": 2'
 }
 
 @test "db_check_integrity fails on corrupted database" {
@@ -212,4 +212,24 @@ print('OK')
   assert_success
   [ -f "$TEST_TEMP/custom.db" ]
   [ ! -f "$SPECTRA_HOME/spectra.db" ]
+}
+
+@test "schema version 2 is tracked in schema_migrations after init" {
+  bash "$PROJECT_ROOT/shared/tools/db-utils.sh" init
+
+  run bash "$PROJECT_ROOT/shared/tools/db-utils.sh" query \
+    "SELECT version, description FROM schema_migrations WHERE version = 2"
+  assert_success
+  assert_output --partial '"version": 2'
+  assert_output --partial "Phase 2"
+}
+
+@test "db_init with both v1 and v2 migrations is idempotent" {
+  bash "$PROJECT_ROOT/shared/tools/db-utils.sh" init
+  bash "$PROJECT_ROOT/shared/tools/db-utils.sh" init
+
+  run bash "$PROJECT_ROOT/shared/tools/db-utils.sh" query \
+    "SELECT COUNT(*) as cnt FROM schema_migrations"
+  assert_success
+  assert_output --partial '"cnt": 2'
 }

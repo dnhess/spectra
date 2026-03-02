@@ -270,6 +270,125 @@ print(json.dumps({
 }
 
 # ---------------------------------------------------------------------------
+# Context budget & quality KPI test helpers
+# ---------------------------------------------------------------------------
+
+# Output a context_budget_status event
+# Usage: make_budget_event <seq> <level> <rounds> <output_kb> <agents>
+make_budget_event() {
+  local seq="$1" level="$2" rounds="$3" output_kb="$4" agents="$5"
+  local session_id="${6:-test-session-001}"
+  python3 -c "
+import json, uuid, datetime
+print(json.dumps({
+    'event_id': str(uuid.uuid4()),
+    'sequence_number': int('$seq'),
+    'schema_version': '1.1.0',
+    'session_id': '$session_id',
+    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'type': 'context_budget_status',
+    'phase': 'discussion_round_1',
+    'metrics': {
+        'rounds_completed': int('$rounds'),
+        'cumulative_output_kb': float('$output_kb'),
+        'agents_spawned': int('$agents'),
+        'moderator_output_kb': 10.0
+    },
+    'active_threshold': '$level',
+    'tier_limits': {'max_rounds': 5, 'max_output_kb': 300},
+    'action_taken': 'logged'
+}))"
+}
+
+# Output an emergency_checkpoint event
+# Usage: make_emergency_checkpoint <seq> <phase> <round>
+make_emergency_checkpoint() {
+  local seq="$1" phase="$2" round="$3"
+  local session_id="${4:-test-session-001}"
+  python3 -c "
+import json, uuid, datetime
+print(json.dumps({
+    'event_id': str(uuid.uuid4()),
+    'sequence_number': int('$seq'),
+    'schema_version': '1.1.0',
+    'session_id': '$session_id',
+    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'type': 'emergency_checkpoint',
+    'phase': '$phase',
+    'sub_step': 'polling_round_$round',
+    'recovery_state': {
+        'resume_phase': '$phase',
+        'resume_round': int('$round'),
+        'resume_step': 'polling',
+        'completed_agents': [
+            {'agent_id': 'arch', 'output_path': '$phase/round-$round/arch.json', 'processing_status': 'consumed'}
+        ],
+        'pending_agents': [
+            {'agent_id': 'perf', 'expected_output_path': '$phase/round-$round/perf.json', 'assigned_topics': ['T001']}
+        ],
+        'event_log_sequence_number': int('$seq'),
+        'session_config': {
+            'tier': 'deep',
+            'agent_roster': ['arch', 'sec', 'perf'],
+            'phase_plan': ['opening', 'discussion', 'final_positions', 'synthesis']
+        },
+        'checkpoint_reason': 'context_budget_critical',
+        'context_budget_at_checkpoint': {
+            'rounds_completed': int('$round'),
+            'cumulative_output_kb': 287.5,
+            'agents_spawned': 18
+        },
+        'security_violations_active': False
+    },
+    'recovery_context': 'Emergency shutdown due to context budget critical threshold'
+}))"
+}
+
+# Output a specialist_recommended event
+# Usage: make_specialist_recommended <seq> <specialist> <approved> <spawned>
+make_specialist_recommended() {
+  local seq="$1" specialist="$2" approved="$3" spawned="$4"
+  local session_id="${5:-test-session-001}"
+  python3 -c "
+import json, uuid, datetime
+print(json.dumps({
+    'event_id': str(uuid.uuid4()),
+    'sequence_number': int('$seq'),
+    'schema_version': '1.1.0',
+    'session_id': '$session_id',
+    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'type': 'specialist_recommended',
+    'specialist': '$specialist',
+    'justification': 'Document describes $specialist concerns',
+    'user_approved': '$approved' == 'true',
+    'spawned': '$spawned' == 'true'
+}))"
+}
+
+# Output a session_end event with quality_kpis
+# Usage: make_session_end_with_kpis <seq> <quality> [session_id]
+make_session_end_with_kpis() {
+  local seq="$1" quality="$2" session_id="${3:-test-session-001}"
+  python3 -c "
+import json, uuid, datetime
+print(json.dumps({
+    'event_id': str(uuid.uuid4()),
+    'sequence_number': int('$seq'),
+    'schema_version': '1.0.0',
+    'session_id': '$session_id',
+    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'type': 'session_end',
+    'quality': '$quality',
+    'agent_count': 7,
+    'quality_kpis': {
+        'completion_rate': 0.857,
+        'phase_completion_rate': 1.0,
+        'security_violations_count': 0
+    }
+}))"
+}
+
+# ---------------------------------------------------------------------------
 # Update / release test helpers
 # ---------------------------------------------------------------------------
 

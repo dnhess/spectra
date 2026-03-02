@@ -351,5 +351,35 @@ print(json.dumps({
 
   run python3 "$PROJECT_ROOT/test/helpers/validate_event.py" "$event"
   assert_failure
-  assert_output --partial "schema_version must be '1.0.0'"
+  assert_output --partial "schema_version must be '1.0.0' or '1.1.0'"
+}
+
+@test "validate_event: schema_version 1.1.0 accepted" {
+  local event
+  event="$(python3 -c "
+import json, uuid, datetime
+print(json.dumps({
+    'event_id': str(uuid.uuid4()),
+    'sequence_number': 1,
+    'schema_version': '1.1.0',
+    'session_id': 'test-session-001',
+    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'type': 'context_budget_status'
+}))")"
+
+  run python3 "$PROJECT_ROOT/test/helpers/validate_event.py" "$event"
+  assert_success
+}
+
+@test "new event types maintain sequence continuity in mixed log" {
+  local jsonl_file="$TEST_TEMP/events.jsonl"
+  make_event 1 session_start > "$jsonl_file"
+  make_event 2 phase_transition >> "$jsonl_file"
+  make_budget_event 3 none 1 50.0 7 >> "$jsonl_file"
+  make_event 4 agent_complete >> "$jsonl_file"
+  make_event 5 checkpoint_written >> "$jsonl_file"
+  make_budget_event 6 warning 2 100.0 14 >> "$jsonl_file"
+
+  run bash "$PROJECT_ROOT/shared/tools/jsonl-utils.sh" sequence-check "$jsonl_file"
+  assert_success
 }
