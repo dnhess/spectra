@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `trust-layer` skill: adversarial 4-persona verification for AI-generated code, diffs, files, and Spectra session artifacts. Supports Quick/Standard/Deep tiers with Package Validator, Intent Auditor, Security Challenger, and Coherence Checker personas.
+- `shared/verification.md`: lightweight 2-agent post-synthesis trust hook (Package Validator + Intent Auditor) automatically run by deep-design, decision-board, and code-review at the end of synthesis (Standard and Deep tiers).
+
 ### Changed
 
 - README and CLAUDE.md: clarified SQLite status as scaffolded/not yet wired (JSONL manifests are the active storage layer)
