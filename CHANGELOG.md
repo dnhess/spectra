@@ -12,11 +12,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `trust-layer` skill: adversarial 4-persona verification for AI-generated code, diffs, files, and Spectra session artifacts. Supports Quick/Standard/Deep tiers with Package Validator, Intent Auditor, Security Challenger, and Coherence Checker personas.
 - `shared/verification.md`: lightweight 2-agent post-synthesis trust hook (Package Validator + Intent Auditor) automatically run by deep-design, decision-board, and code-review at the end of synthesis (Standard and Deep tiers).
 - `coherence-monitor` skill: dual-mode metacognitive checkpointing skill. Spectra-aware mode audits any Spectra session via `synthesis-brief.json`; Standalone mode audits any long-running work from intent + state description. Four personas: Alignment Auditor, Contradiction Detector, Constraint Monitor, Devil's Examiner.
+- Shared Scout agent template in `shared/orchestration.md` — standardizes pre-session context
+  gathering across all skills with a `context-brief.json` output schema (skill, project, subject,
+  skill_context fields)
+- Scout phase (Phase 2.5) added to `deep-design`, `decision-board`, `trust-layer`, and
+  `coherence-monitor`: a subagent gathers project/subject context before main agents run,
+  reducing redundant per-agent context gathering
+- `peer-review` Scout aligned to shared standard: `context-brief.json` replaces `context-bundle.json`,
+  schema restructured with skill/project/subject/skill_context top-level fields
 
 ### Changed
 
 - README and CLAUDE.md: clarified SQLite status as scaffolded/not yet wired (JSONL manifests are the active storage layer)
 - CLAUDE.md: fixed security.md layer count (3 → 4), updated persona counts, added missing code-review skill to Structure section
+- `code-review` skill renamed to `peer-review` to avoid naming conflicts with meta-workflow skills
+  (e.g., `superpowers:requesting-code-review`)
+- Agent write instructions updated across all skills to pipe through `~/.spectra/bin/json-write.sh`
+  for atomic writes and JSON validation (replaces inline `python3 -c` redirect pattern)
+- `install.sh` updated: `code-review` → `peer-review` in symlink and session directory setup
+
+### Migration
+
+- Any `~/.claude/skills/code-review` symlink from a prior Spectra install is automatically
+  removed and replaced with `~/.claude/skills/peer-review` on `spectra install` or `spectra update`
+- `context-bundle.json` is no longer written by peer-review; consumers should read
+  `context-brief.json` at the session root instead
 
 ## [0.3.0] - 2026-03-02
 
