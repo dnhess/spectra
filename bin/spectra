@@ -16,7 +16,7 @@ readonly LOCK_DIR="$SPECTRA_HOME/.settings-lock"
 readonly GITHUB_REPO="dnhess/spectra"
 
 # Known skills (update when adding new skills)
-readonly KNOWN_SKILLS=(shared deep-design decision-board code-review)
+readonly KNOWN_SKILLS=(shared deep-design decision-board code-review trust-layer coherence-monitor)
 
 # --- Logging ---
 

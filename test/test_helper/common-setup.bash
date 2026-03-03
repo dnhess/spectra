@@ -33,7 +33,7 @@ _common_teardown() {
 # Create the full ~/.spectra/ tree that require_installed expects
 bootstrap_installed_state() {
   mkdir -p "$SPECTRA_HOME"/{skills,sessions,backups,bin}
-  mkdir -p "$SPECTRA_HOME/sessions"/{deep-design,decision-board,code-review}
+  mkdir -p "$SPECTRA_HOME/sessions"/{deep-design,decision-board,code-review,trust-layer,coherence-monitor}
   mkdir -p "$CLAUDE_HOME/skills"
 
   # Version and mode files
@@ -50,7 +50,7 @@ bootstrap_installed_state() {
   fi
 
   # Create skill directories with minimal content
-  for skill in shared deep-design decision-board code-review; do
+  for skill in shared deep-design decision-board code-review trust-layer coherence-monitor; do
     mkdir -p "$SPECTRA_HOME/skills/$skill"
     if [[ "$skill" != "shared" ]]; then
       touch "$SPECTRA_HOME/skills/$skill/SKILL.md"
@@ -61,7 +61,7 @@ bootstrap_installed_state() {
   touch "$SPECTRA_HOME/skills/shared/orchestration.md"
 
   # Create symlinks
-  for skill in shared deep-design decision-board code-review; do
+  for skill in shared deep-design decision-board code-review trust-layer coherence-monitor; do
     ln -sfn "$SPECTRA_HOME/skills/$skill" "$CLAUDE_SKILLS_DIR/$skill"
   done
 
@@ -98,7 +98,7 @@ create_fake_repo() {
     chmod +x "$repo_dir/bin/json-write.sh"
   fi
 
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board code-review trust-layer coherence-monitor; do
     mkdir -p "$repo_dir/$skill/personas"
     touch "$repo_dir/$skill/SKILL.md"
   done

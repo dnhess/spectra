@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `trust-layer` skill: adversarial 4-persona verification for AI-generated code, diffs, files, and Spectra session artifacts. Supports Quick/Standard/Deep tiers with Package Validator, Intent Auditor, Security Challenger, and Coherence Checker personas.
+- `shared/verification.md`: lightweight 2-agent post-synthesis trust hook (Package Validator + Intent Auditor) automatically run by deep-design, decision-board, and code-review at the end of synthesis (Standard and Deep tiers).
+- `coherence-monitor` skill: dual-mode metacognitive checkpointing skill. Spectra-aware mode audits any Spectra session via `synthesis-brief.json`; Standalone mode audits any long-running work from intent + state description. Four personas: Alignment Auditor, Contradiction Detector, Constraint Monitor, Devil's Examiner.
+
 ### Changed
 
 - README and CLAUDE.md: clarified SQLite status as scaffolded/not yet wired (JSONL manifests are the active storage layer)

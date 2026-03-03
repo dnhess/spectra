@@ -882,6 +882,19 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
    - Any unexpected file triggers a `security_violation` event and user warning
    - Offending files are NOT included in the final output presentation
 
+### Verification Hook (Standard and Deep tiers only)
+
+After synthesis artifacts are written, run the shared verification protocol from `shared/verification.md`:
+
+1. Identify the primary synthesis artifact path (e.g., `decision-record.md`, `design-brief.md`, findings summary)
+2. Extract `original_intent` from the `session_start` event's `decision_question` or equivalent field
+3. Follow the 2-agent spawn protocol defined in `shared/verification.md`
+4. Compute `trust_score` and `trust_verdict` per the protocol's Result Handling section
+5. Add `trust_score` and `trust_verdict` fields to the `session_end` event
+6. Surface WARN or FAIL results to the user per the protocol's threshold table
+
+Skip this step for Quick tier sessions.
+
 7. **Write `session_end` event** to `review-events.jsonl` with final metrics (quality computed per formula in event-schemas.md, using metrics from the synthesis brief and synthesis agents' return summaries). Include `compositions_invoked` and `topics_resolved_by_composition` fields.
 
    After computing quality, compute quality KPIs from the event log:

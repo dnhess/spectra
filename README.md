@@ -22,6 +22,16 @@ Triggers: architectural decisions, technology selection, build-vs-buy, migration
 
 Triggers: pull requests, code changes, refactoring review.
 
+### trust-layer
+**Adversarial verification for AI-generated output.** Use before accepting any AI-generated code, diff, file, or Spectra session recommendation. Four adversarial personas (Package Validator, Intent Auditor, Security Challenger, Coherence Checker) challenge the output from independent angles.
+
+Triggers: AI-generated code, diffs, files, or Spectra session output needing verification before acceptance.
+
+### coherence-monitor
+**Metacognitive audit for long-running work.** Use at checkpoints during complex agent tasks or to audit a completed Spectra session before acting on its recommendation. Answers: "Am I still solving the right problem?"
+
+Triggers: long-running agent checkpoints, mid-session drift detection, auditing completed Spectra sessions.
+
 ## Installation
 
 ```bash
@@ -130,6 +140,7 @@ spectra/
     event-schemas-base.md       # Common event types across all skills
     composition.md              # Skill composition protocol (inter-skill invocation)
     security.md                 # 4-layer defense, content isolation, audits
+    verification.md             # Lightweight 2-agent post-synthesis trust hook
     tools/
       jsonl-utils.sh            # JSONL query utility
       db-utils.sh               # SQLite database utilities (WAL mode)
@@ -147,6 +158,14 @@ spectra/
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
     personas/                   # 6 core + 6 specialist reviewers
+  trust-layer/                  # Adversarial verification skill
+    SKILL.md                    # Domain orchestration
+    event-schemas.md            # Domain-specific event types
+    personas/                   # 4 core verification personas
+  coherence-monitor/            # Metacognitive audit skill
+    SKILL.md                    # Domain orchestration
+    event-schemas.md            # Domain-specific event types
+    personas/                   # 4 core audit personas
 ```
 
 ## Adding New Skills
