@@ -483,7 +483,8 @@ Once verification is complete:
 1. **Aggregate all findings** from `trust-check/*.json` and `discussion/round-*/` files. Deduplicate
    findings by evidence reference. Challenged and retracted findings are downweighted.
 
-2. **Compute trust_score** per the formula in `~/.claude/skills/shared/verification.md`. Score
+2. **Compute trust_score** using the four-layer weighted formula below (full Trust Layer sessions).
+   The Shared Hook Path uses the simpler two-agent formula in `shared/verification.md`. Score
    components:
 
    - Package layer (weight 25%): 100 − (critical × 30 + major × 10 + minor × 3), floor 0
