@@ -17,7 +17,7 @@ Triggers: design docs, architecture specs, product requirements, feature proposa
 
 Triggers: architectural decisions, technology selection, build-vs-buy, migration strategy.
 
-### code-review
+### peer-review
 **Multi-perspective code review.** Use when code changes need thorough review from multiple specialist viewpoints before merge.
 
 Triggers: pull requests, code changes, refactoring review.
@@ -154,7 +154,7 @@ spectra/
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
     personas/                   # 7 core + 9 specialist debaters
-  code-review/                  # Code review skill
+  peer-review/                  # Code review skill
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
     personas/                   # 6 core + 6 specialist reviewers

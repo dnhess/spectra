@@ -35,7 +35,7 @@ teardown() { _common_teardown; }
   run "$SPECTRA_CLI" link "$repo_dir"
   assert_success
 
-  for skill in shared deep-design decision-board code-review; do
+  for skill in shared deep-design decision-board peer-review; do
     local link="$CLAUDE_SKILLS_DIR/$skill"
     [[ -L "$link" ]]
     local target
@@ -109,7 +109,7 @@ teardown() { _common_teardown; }
   repo_dir="$(create_fake_repo)"
 
   # Ensure release skills exist so unlink doesn't try network calls
-  for skill in shared deep-design decision-board code-review; do
+  for skill in shared deep-design decision-board peer-review; do
     mkdir -p "$SPECTRA_HOME/skills/$skill"
   done
   mkdir -p "$SPECTRA_HOME/skills/shared/tools"

@@ -11,3 +11,5 @@
 # Event schemas — must stay consistent with shared base
 /deep-design/event-schemas.md @dnhess
 /decision-board/event-schemas.md @dnhess
+/peer-review/SKILL.md @dnhess
+/peer-review/event-schemas.md @dnhess

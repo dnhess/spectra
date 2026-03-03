@@ -240,7 +240,7 @@ print('OK')
   assert_output "OK"
 }
 
-@test "code-review manifest entry with domain fields is valid" {
+@test "peer-review manifest entry with domain fields is valid" {
   local entry
   entry="$(python3 -c "
 import json, datetime

@@ -54,9 +54,9 @@ teardown() { _common_teardown; }
   [[ "${output}" -ge 1 ]]
 }
 
-@test "code-review discussion template contains review data delimiters" {
+@test "peer-review discussion template contains review data delimiters" {
   run grep -c "===BEGIN-REVIEW-DATA-" \
-    "$PROJECT_ROOT/code-review/SKILL.md"
+    "$PROJECT_ROOT/peer-review/SKILL.md"
   assert_success
   [[ "${output}" -ge 1 ]]
 }
@@ -65,9 +65,9 @@ teardown() { _common_teardown; }
 # Code-review WebSearch prohibition
 # ---------------------------------------------------------------------------
 
-@test "code-review discussion agents have WebSearch prohibition" {
+@test "peer-review discussion agents have WebSearch prohibition" {
   run grep -c "Discussion agents do NOT have WebSearch" \
-    "$PROJECT_ROOT/code-review/SKILL.md"
+    "$PROJECT_ROOT/peer-review/SKILL.md"
   assert_success
   [[ "${output}" -ge 1 ]]
 }
@@ -90,9 +90,9 @@ teardown() { _common_teardown; }
   [[ "${output}" -ge 4 ]]
 }
 
-@test "code-review templates contain WebSearch Guidelines" {
+@test "peer-review templates contain WebSearch Guidelines" {
   run grep -c "## WebSearch Guidelines" \
-    "$PROJECT_ROOT/code-review/SKILL.md"
+    "$PROJECT_ROOT/peer-review/SKILL.md"
   assert_success
   [[ "${output}" -ge 3 ]]
 }
@@ -112,16 +112,16 @@ teardown() { _common_teardown; }
 # Code-review file-read restriction coverage
 # ---------------------------------------------------------------------------
 
-@test "code-review has file-read restriction in 3+ templates" {
+@test "peer-review has file-read restriction in 3+ templates" {
   run grep -c "Do NOT read sensitive system files" \
-    "$PROJECT_ROOT/code-review/SKILL.md"
+    "$PROJECT_ROOT/peer-review/SKILL.md"
   assert_success
   [[ "${output}" -ge 3 ]]
 }
 
-@test "code-review discussion template has WebSearch prohibition in Rules" {
+@test "peer-review discussion template has WebSearch prohibition in Rules" {
   run grep -c "Do NOT use WebSearch" \
-    "$PROJECT_ROOT/code-review/SKILL.md"
+    "$PROJECT_ROOT/peer-review/SKILL.md"
   assert_success
   [[ "${output}" -ge 1 ]]
 }
@@ -131,7 +131,7 @@ teardown() { _common_teardown; }
 # ---------------------------------------------------------------------------
 
 @test "all skills reference round-brief.json in discussion section" {
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     run grep -c "round-brief.json" \
       "$PROJECT_ROOT/$skill/SKILL.md"
     assert_success

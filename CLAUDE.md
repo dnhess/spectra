@@ -12,7 +12,7 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
   - `event-schemas-base.md` — Common event types (session_start, phase_transition, agent_complete, session_complete, session_end, feedback, security_violation, composition_invoked, composition_completed)
   - `composition.md` — Skill composition protocol for inter-skill invocation mid-session
   - `security.md` — 4-layer defense model, content isolation, directory audits
-  - `verification.md` — Lightweight 2-agent post-synthesis trust hook (Package Validator + Intent Auditor); runs automatically in deep-design, decision-board, and code-review at end of synthesis
+  - `verification.md` — Lightweight 2-agent post-synthesis trust hook (Package Validator + Intent Auditor); runs automatically in deep-design, decision-board, and peer-review at end of synthesis
   - `tools/jsonl-utils.sh` — JSONL query utility (single copy, used by all skills)
 - `deep-design/` — Multi-perspective design review skill (v4.0)
   - `SKILL.md` — Full orchestration spec, references `shared/`
@@ -22,7 +22,7 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
   - `SKILL.md` — Full orchestration spec, references `shared/`
   - `event-schemas.md` — Domain events only (stance, challenge, concession, etc.)
   - `personas/` — 7 core + 9 specialist debater personas
-- `code-review/` — Multi-perspective code review skill (v1.0)
+- `peer-review/` — Multi-perspective code review skill (v1.0)
   - `SKILL.md` — Full orchestration spec, references `shared/`
   - `event-schemas.md` — Domain events only (finding, finding_challenged, etc.)
   - `personas/` — 6 core + 6 specialist reviewer personas
