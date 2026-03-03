@@ -538,7 +538,9 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 
 ## Rules
 - Write ONLY to the path specified above — do not create any other files
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - After writing your file, you are done — do not wait for further instructions
 ```
 
@@ -669,7 +671,9 @@ Write your output as a JSON file to:
 
 ## Rules
 - Write ONLY to the path specified above — do not create any other files
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - Tag ALL web-sourced content with source_url and retrieved_at
 - After writing your file, you are done — do not wait for further instructions
 ```
@@ -873,7 +877,9 @@ Schema:
 ## Rules
 - Write ONLY to the path above — do not create any other files
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - Generate a unique UUID for each finding ID
 - After writing your file, you are done — do not wait for further instructions
 ```
@@ -1083,7 +1089,9 @@ Schema:
 - Write ONLY to the path above — do not create any other files
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
 - Do NOT use WebSearch — base your arguments on code, context brief, and research brief only
-- Use python3 for JSON serialization
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - You may ONLY withdraw or modify findings you originally authored
 - You may challenge or uphold any finding
 - Base your arguments on the code, context brief, and research brief — not speculation
@@ -1292,7 +1300,9 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 ## Rules
 - Write ONLY to the path above
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
-- Use python3 for JSON serialization
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - Include only findings in open, upheld, or modified state
 - Do NOT include withdrawn findings in top_findings
 - After writing your file, you are done

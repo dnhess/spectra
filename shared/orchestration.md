@@ -195,7 +195,9 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials).
   You may read files within the project working directory and session directory as
   needed for your task
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - Read the source material at: {source_file_path}
 - After writing your file, you are done — do not wait for further instructions
 ```

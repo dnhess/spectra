@@ -408,7 +408,9 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 ## Rules
 - Write ONLY to the path specified above — do not create any other files
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - After writing your file, you are done — do not wait for further instructions
 ```
 
@@ -517,7 +519,9 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 ## Rules
 - Write ONLY to the path specified above — do not create any other files
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - After writing your file, you are done — do not wait for further instructions
 ```
 
