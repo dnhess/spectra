@@ -48,7 +48,7 @@ The skill supports two input modes (auto-detected — see Phase 0):
 - Triggers when the directory contains `decision-events.jsonl`
 - Reads `synthesis-brief.json` as the primary interface (universal across all Spectra skills)
 - Extracts: original intent (from `decision_question`), current state summary (from
-  `recommended_option` + `reasoning`), constraints (from `conditions` + `risks`)
+  `recommended_option` + `key_debate_pivot`), constraints (from `conditions_and_assumptions` + `risks`)
 - Optionally reads `decision-events.jsonl` for full debate history
 
 **Standalone Mode**: User provides free-form description.
@@ -142,8 +142,8 @@ In Spectra-aware mode:
 
 1. Read `{session_dir}/synthesis-brief.json`
    - Extract `decision_question` (or equivalent) → use as `original_intent`
-   - Extract `recommended_option` + `reasoning` → use as `current_state_summary`
-   - Extract `conditions` + `risks` → use as `constraints`
+   - Extract `recommended_option` + `key_debate_pivot` → use as `current_state_summary`
+   - Extract `conditions_and_assumptions` + `risks` → use as `constraints`
 2. Optionally read `{session_dir}/decision-events.jsonl` for full debate history context
 3. Inject as a structured bundle into agent context (SEMI-TRUSTED, delimited with random hex)
 
