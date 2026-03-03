@@ -732,6 +732,20 @@ All failure modes, severity tiers (P0/P1/P2), detection methods, and recovery pr
 defined in `~/.claude/skills/shared/orchestration.md` under "Failure Modes". This section covers
 trust-layer-specific overrides only.
 
+### Minimum Quorum (trust-layer)
+
+The global quorum of 2 applies, but with a skill-specific constraint: **Security Challenger and
+Package Validator must both complete** for the session to produce a valid trust verdict. If either
+times out, the result is `INCONCLUSIVE` regardless of how many other agents completed.
+
+If Security Challenger or Package Validator times out:
+
+1. Write a `trust_verdict` event with `verdict: "INCONCLUSIVE"` and note which required agent
+   timed out.
+2. Surface to user: "Trust check incomplete — {agent-name} did not respond. Review output
+   manually."
+3. Continue to session_end.
+
 ### Quality Computation (trust-layer)
 
 `session_end.quality` is computed deterministically:
