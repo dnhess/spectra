@@ -115,8 +115,8 @@ digraph coherence_monitor {
 
 | Role | Quick | Standard | Deep |
 |---|---|---|---|
-| Alignment Auditor | `claude-sonnet-4-6` | `claude-sonnet-4-6` | `claude-opus-4-6` |
-| Contradiction Detector | `claude-sonnet-4-6` | `claude-sonnet-4-6` | `claude-opus-4-6` |
+| Alignment Auditor | `claude-haiku-4-5-20251001` | `claude-sonnet-4-6` | `claude-opus-4-6` |
+| Contradiction Detector | `claude-haiku-4-5-20251001` | `claude-sonnet-4-6` | `claude-opus-4-6` |
 | Constraint Monitor | — | `claude-sonnet-4-6` | `claude-opus-4-6` |
 | Devil's Examiner | — | `claude-sonnet-4-6` | `claude-opus-4-6` |
 | Discussion agents | — | `claude-sonnet-4-6` | `claude-opus-4-6` |
