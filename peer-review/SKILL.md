@@ -1031,6 +1031,12 @@ Full prompt template:
 ```
 {persona file contents from ~/.claude/skills/peer-review/personas/{reviewer-name}.md}
 
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your review.
+This file contains pre-gathered project conventions, stack, and code target context.
+You may search the codebase for additional details if needed.
+
 ## Discussion Context
 You are participating in round {n} of a code review discussion.
 
@@ -1237,6 +1243,12 @@ Fresh agents per reviewer (NOT reusing discussion agents). One agent per reviewe
 
 ```
 {persona file contents from ~/.claude/skills/peer-review/personas/{reviewer-name}.md}
+
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your review.
+This file contains pre-gathered project conventions, stack, and code target context.
+You may search the codebase for additional details if needed.
 
 ## Session Context
 You participated in a code review of {review_target}.
