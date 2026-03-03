@@ -57,7 +57,9 @@ jobs:
             shared/ \
             deep-design/ \
             decision-board/ \
-            code-review/ \
+            peer-review/ \
+            trust-layer/ \
+            coherence-monitor/ \
             CHANGELOG.md \
             README.md
           echo "tarball_name=$tarball_name" >> "$GITHUB_ENV"
@@ -72,7 +74,9 @@ jobs:
           test -d /tmp/validate/shared
           test -d /tmp/validate/deep-design
           test -d /tmp/validate/decision-board
-          test -d /tmp/validate/code-review
+          test -d /tmp/validate/peer-review
+          test -d /tmp/validate/trust-layer
+          test -d /tmp/validate/coherence-monitor
           echo "Tarball structure validated"
 
       - name: Generate checksums
