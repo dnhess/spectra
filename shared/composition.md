@@ -30,7 +30,8 @@ The parent writes `composition-request.json` to its session directory before inv
     "skill": "decision-board",
     "tier_override": "standard",
     "skip_confirmation": true,
-    "skip_feedback": true
+    "skip_feedback": true,
+    "invocation_type": null
   },
   "request": {
     "question": "Should MFA be required for all users or only admin roles?",
@@ -68,6 +69,7 @@ The parent writes `composition-request.json` to its session directory before inv
 | `child.tier_override` | String | Yes | Tier for child session (one below parent) |
 | `child.skip_confirmation` | Boolean | Yes | Skip the child skill's confirmation gate |
 | `child.skip_feedback` | Boolean | Yes | Skip the child skill's post-session feedback survey |
+| `child.invocation_type` | String | No | Optional invocation type hint for the child skill. Use `"verification_hook"` when the child skill should operate in headless hook mode rather than its standard interactive flow. Defaults to `null`. |
 | `request.question` | String | Yes | The question for the child skill to resolve |
 | `request.options` | Array | No | Pre-defined options (child skill may generate its own if omitted) |
 | `request.constraints` | Array | No | Hard constraints the answer must satisfy |
