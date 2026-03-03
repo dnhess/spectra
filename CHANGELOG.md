@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-03
+
 ### Added
 
 - `trust-layer` skill: adversarial 4-persona verification for AI-generated code, diffs, files, and Spectra session artifacts. Supports Quick/Standard/Deep tiers with Package Validator, Intent Auditor, Security Challenger, and Coherence Checker personas.
