@@ -34,7 +34,7 @@ The `original_intent` field maps to different source fields depending on the inv
 |---|---|
 | decision-board | `decision_question` |
 | deep-design | `review_question` or the document title |
-| code-review | `review_target` |
+| peer-review | `review_target` |
 | trust-layer | `input_description` or user-provided intent |
 
 ## Output Schema

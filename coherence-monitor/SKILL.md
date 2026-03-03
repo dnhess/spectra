@@ -152,7 +152,7 @@ In Spectra-aware mode:
    - If the file exists but fails JSON parse: surface error "synthesis-brief.json is malformed.
      Use Standalone mode instead?" and offer the user a choice to switch modes.
    - If parse succeeds, extract:
-     - `decision_question` (or `review_target` for code-review sessions) → use as `original_intent`
+     - `decision_question` (or `review_target` for peer-review sessions) → use as `original_intent`
      - `recommended_option` + `key_debate_pivot` → use as `current_state_summary`
      - `conditions_and_assumptions` + `risks` → use as `constraints`
 2. Optionally read the skill-specific event log (`decision-events.jsonl`, `review-events.jsonl`, or `coherence-events.jsonl`) for full session history context

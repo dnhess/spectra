@@ -33,7 +33,7 @@ Structured multi-perspective **debate** for architectural decisions, technology 
 - **9 specialist debaters:** Technical Writer, Security Expert, Performance SRE, API Designer, Distributed Systems Expert, Migration Expert, and more
 - **Output:** ADR with rationale, alternatives considered, and dissenting views
 
-### `code-review` (v1.0)
+### `peer-review` (v1.0)
 Multi-perspective **code review** for PRs, feature branches, and module rewrites. Includes a unique reconnaissance phase (Scout + Research) that gathers codebase context and best practices before reviewers begin.
 
 - **6 core reviewers:** Reliability Engineer, Security Auditor, Performance Analyst, Design Critic, Maintainability Advocate, Test Strategist
@@ -134,7 +134,7 @@ spectra/
 │   ├── SKILL.md                    # Full orchestration spec
 │   ├── event-schemas.md            # Domain-specific events
 │   └── personas/                   # 7 core + 9 specialist debaters
-├── code-review/
+├── peer-review/
 │   ├── SKILL.md                    # Full orchestration spec (78 KB)
 │   ├── event-schemas.md            # Domain-specific events
 │   └── personas/                   # 6 core + 6 specialist reviewers
@@ -317,5 +317,5 @@ GitHub Actions blocks merge if:
 | `shared/tools/validate-output.sh` | 5-stage validation pipeline |
 | `deep-design/SKILL.md` | Deep design skill full spec |
 | `decision-board/SKILL.md` | Decision board skill full spec |
-| `code-review/SKILL.md` | Code review skill full spec (78 KB) |
+| `peer-review/SKILL.md` | Code review skill full spec (78 KB) |
 | `docs/plans/2026-03-01-product-strategy-directions.md` | Strategic direction analysis |

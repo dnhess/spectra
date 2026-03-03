@@ -1,6 +1,6 @@
-# Event Schemas — Code Review Board
+# Event Schemas — Peer Review Board
 
-This file defines domain-specific event types for code-review. For common event types (session_start, phase_transition, agent_complete, session_complete, session_end, feedback, security_violation, composition_invoked, composition_completed, checkpoint_written, handoff_written), see `~/.claude/skills/shared/event-schemas-base.md`.
+This file defines domain-specific event types for peer-review. For common event types (session_start, phase_transition, agent_complete, session_complete, session_end, feedback, security_violation, composition_invoked, composition_completed, checkpoint_written, handoff_written), see `~/.claude/skills/shared/event-schemas-base.md`.
 
 ## Domain-Specific Event Types
 
@@ -408,9 +408,9 @@ An agent's top findings and recommendations at the end of discussion, summarizin
 - `top_findings` (array of strings): Finding IDs the agent considers most important, in priority order.
 - `recommendations` (array of strings): The agent's top recommendations for the codebase.
 
-## Code-Review `session_start` Extensions
+## Peer-Review `session_start` Extensions
 
-The `session_start` event (defined in shared base) includes these additional fields for code-review:
+The `session_start` event (defined in shared base) includes these additional fields for peer-review:
 
 ```json
 {
@@ -424,9 +424,9 @@ The `session_start` event (defined in shared base) includes these additional fie
 - `review_mode` (enum): `diff` (reviewing a specific change) or `module` (reviewing a module holistically).
 - `technologies_detected` (array of strings): Technologies identified during recon. May be empty at session start and populated after the recon phase.
 
-## Code-Review `session_end` Extensions
+## Peer-Review `session_end` Extensions
 
-The `session_end` event (defined in shared base) includes these additional fields for code-review:
+The `session_end` event (defined in shared base) includes these additional fields for peer-review:
 
 ```json
 {
@@ -453,7 +453,7 @@ The `session_end` event (defined in shared base) includes these additional field
 - `findings_nit` (integer): Count of findings with `nit` severity in terminal state.
 - `findings_withdrawn` (integer): Count of findings that were withdrawn during discussion.
 - `composition_used` (boolean): Whether skill composition was invoked during the session.
-- `quality_kpis`: Optional object (additive, schema 1.1.0) containing shared and domain-specific quality metrics. Shared KPIs are defined in `event-schemas-base.md`. Code-review-specific KPI formulas:
+- `quality_kpis`: Optional object (additive, schema 1.1.0) containing shared and domain-specific quality metrics. Shared KPIs are defined in `event-schemas-base.md`. Peer-review-specific KPI formulas:
 
 | Metric | Formula | Data Source | Edge Cases |
 |---|---|---|---|
@@ -484,11 +484,11 @@ Where `n` is the number of agents in `session_start.agents`. A finding is in "te
 
 ## Cross-Session Manifest Schema
 
-Each entry in `~/.spectra/sessions/code-review/manifest.jsonl` includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus these domain-specific fields:
+Each entry in `~/.spectra/sessions/peer-review/manifest.jsonl` includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus these domain-specific fields:
 
 ```json
 {
-  "session_id": "code-review-{target}-{timestamp}",
+  "session_id": "peer-review-{target}-{timestamp}",
   "timestamp": "ISO-8601",
   "review_target": "src/auth/service.ts",
   "review_mode": "diff | module",
