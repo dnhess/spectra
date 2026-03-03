@@ -22,9 +22,20 @@ The moderator spawns exactly 2 agents in parallel using Trust Layer personas:
 
 Each agent receives:
 
-- `original_intent`: the `decision_question` or equivalent from the `session_start` event
+- `original_intent`: the skill-specific intent field from the `session_start` event (see mapping below)
 - `synthesis_output`: the text content of the primary synthesis artifact (e.g., `decision-record.md`, `design-brief.md`, or the findings list)
 - `write_path`: `{session_directory}/trust-check/{agent-name}.json`
+
+### Field Mapping by Skill
+
+The `original_intent` field maps to different source fields depending on the invoking skill:
+
+| Skill | original_intent source field |
+|---|---|
+| decision-board | `decision_question` |
+| deep-design | `review_question` or the document title |
+| code-review | `review_target` |
+| trust-layer | `input_description` or user-provided intent |
 
 ## Output Schema
 
