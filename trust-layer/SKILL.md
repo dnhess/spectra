@@ -56,7 +56,7 @@ is inferred from code structure and signals.
 ## Process
 
 ```dot
-digraph trust_layer {
+digraph trust-layer {
     rankdir=TB;
     "Phase 0: Detect input mode" [shape=box];
     "Phase 1: Auto-select tier" [shape=box];
@@ -130,6 +130,10 @@ Auto-suggest based on input signals:
 User can always override at the confirmation gate.
 
 ## Phase 0: Input Mode Detection
+
+**Dispatch guard**: Composition-request detection (see below) takes priority. If
+`composition-request.json` is found and handled, none of the input mode detection steps below
+run. The rest of this phase only executes on the standard user-invocation path.
 
 Detect which input mode applies based on what the user provides:
 
@@ -504,6 +508,19 @@ Once verification is complete:
 
    Coherence layer score defaults to 100 when not present (Quick tier).
 
+   To avoid arithmetic errors, the moderator computes the final trust score using python3:
+
+   ```python
+   layer_scores = {
+       "package":   max(0, 100 - (critical_package   * 30 + major_package   * 10 + minor_package   * 3)),
+       "intent":    max(0, 100 - (critical_intent    * 30 + major_intent    * 10 + minor_intent    * 3)),
+       "security":  max(0, 100 - (critical_security  * 40 + major_security  * 15 + minor_security  * 5)),
+       "coherence": max(0, 100 - (critical_coherence * 20 + major_coherence * 8  + minor_coherence * 2)),
+   }
+   weights = {"package": 0.25, "intent": 0.30, "security": 0.30, "coherence": 0.15}
+   trust_score = round(sum(layer_scores[l] * weights[l] for l in layer_scores))
+   ```
+
 3. **Determine verdict**:
    - PASS: trust_score 75–100
    - WARN: trust_score 50–74
@@ -645,7 +662,7 @@ spectra/
     verification.md
 ```
 
-Runtime session directory:
+Runtime session directory — Standard invocation path:
 
 ```
 ~/.spectra/sessions/trust-layer/{topic}-{timestamp}/
@@ -657,7 +674,6 @@ Runtime session directory:
     intent-auditor.json
     security-challenger.json
     coherence-checker.json         (Standard/Deep only)
-    verdict.json                   (Shared Hook Path only)
   discussion/
     round-1/
       package-validator.json
@@ -669,6 +685,19 @@ Runtime session directory:
   trust-report.json
   trust-report.md
 ```
+
+Runtime session directory — Shared Hook Path (`invocation_type: verification_hook`):
+
+```
+{parent-session-directory}/
+  trust-check/
+    package-validator.json
+    intent-auditor.json
+    verdict.json
+```
+
+Note: in the Hook Path, files are written to the PARENT skill's session directory, not a new
+trust-layer session directory.
 
 ## Cleanup
 
