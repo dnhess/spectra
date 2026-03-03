@@ -8,11 +8,11 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
   - `spectra` — Main CLI (install, update, link, doctor, etc.)
   - `json-write.sh` — Scoped JSON writer (replaces broad `python3 -c` permission)
 - `shared/` — Reusable orchestration infrastructure (not a skill itself)
-  - `orchestration.md` — Blackboard protocol, polling, session management
+  - `orchestration.md` — Blackboard protocol, polling, session management, Scout agent template
   - `event-schemas-base.md` — Common event types (session_start, phase_transition, agent_complete, session_complete, session_end, feedback, security_violation, composition_invoked, composition_completed)
   - `composition.md` — Skill composition protocol for inter-skill invocation mid-session
   - `security.md` — 4-layer defense model, content isolation, directory audits
-  - `verification.md` — Lightweight 2-agent post-synthesis trust hook (Package Validator + Intent Auditor); runs automatically in deep-design, decision-board, and code-review at end of synthesis
+  - `verification.md` — Lightweight 2-agent post-synthesis trust hook (Package Validator + Intent Auditor); runs automatically in deep-design, decision-board, and peer-review at end of synthesis
   - `tools/jsonl-utils.sh` — JSONL query utility (single copy, used by all skills)
 - `deep-design/` — Multi-perspective design review skill (v4.0)
   - `SKILL.md` — Full orchestration spec, references `shared/`
@@ -22,7 +22,7 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
   - `SKILL.md` — Full orchestration spec, references `shared/`
   - `event-schemas.md` — Domain events only (stance, challenge, concession, etc.)
   - `personas/` — 7 core + 9 specialist debater personas
-- `code-review/` — Multi-perspective code review skill (v1.0)
+- `peer-review/` — Multi-perspective code review skill (v1.0)
   - `SKILL.md` — Full orchestration spec, references `shared/`
   - `event-schemas.md` — Domain events only (finding, finding_challenged, etc.)
   - `personas/` — 6 core + 6 specialist reviewer personas
@@ -40,6 +40,7 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 - **Blackboard, not hub-and-spoke**: No coordinator agent. The moderator (main Claude instance) drives sessions directly. Agents write files to session subdirectories; moderator polls with Glob.
 - **Single JSONL writer**: Only the moderator writes to the event log. No writer handoff, no write ordering violations.
 - **Fresh agents per round**: Discussion/debate rounds spawn new agents rather than reusing previous ones. More expensive but guarantees delivery (avoids SendMessage failures).
+- **Scout agent per skill**: Every skill runs a Scout subagent (Phase 2.5) before main agents. The Scout gathers project and subject context into `context-brief.json`. Main agents read this file instead of redundantly re-gathering context, saving tokens at scale.
 - **No cost tracking**: Platform doesn't expose token counts. Budget ceiling and cost snapshots were removed as non-functional.
 - **No heartbeat monitoring**: No timer mechanism in Claude Code. Replaced by file-existence polling with timeouts.
 - **SQLite is scaffolded, not active**: `shared/tools/db-utils.sh` is complete and tested (24 tests), and SKILL.md Phase 6 documents the `db_execute` call, but the moderator does not yet execute it. JSONL manifests are the sole working storage layer. The SQLite infrastructure is retained for future use (cross-session analytics, `spectra stats`, cross-skill queries). Do not remove it — wire it in when a concrete query need emerges.
@@ -47,7 +48,7 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 ## Conventions
 
 - All agents use `general-purpose` subagent type with `bypassPermissions` mode (needed for file writes). Security is enforced via prompt-level path constraints and post-phase directory audits.
-- Agent output files are always JSON, serialized with `python3 -c 'import json; ...'` — never string concatenation. This applies within agent `bypassPermissions` context; the user-facing permission entry uses `bin/json-write.sh` instead.
+- Agent output files are always JSON. Agents serialize with `python3 -c 'import json; ...'` and write by piping to `bash ~/.spectra/bin/json-write.sh` — never raw file redirection. This gives atomic writes, JSON validation, and path enforcement. The user-facing permission entry also uses `bin/json-write.sh`.
 - Session directories live under `~/.spectra/sessions/{skill-name}/`.
 - Persona files are plain markdown in `personas/` (core) and `personas/specialists/` (domain specialists).
 - Domain event schemas reference `shared/event-schemas-base.md` for common types — never duplicate them.

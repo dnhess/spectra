@@ -70,6 +70,7 @@ digraph coherence_monitor {
     "Confirmation gate" [shape=box];
     "User confirms?" [shape=diamond];
     "Phase 2: Team setup (TeamCreate, session dir, session_start event)" [shape=box];
+    "Phase 2.5: Scout — context-brief.json" [shape=box];
     "Phase 3: Spawn personas in parallel, poll for files" [shape=box];
     "Validate output, write coherence_finding events" [shape=box];
     "Post-phase directory audit" [shape=box];
@@ -87,7 +88,8 @@ digraph coherence_monitor {
     "Confirmation gate" -> "User confirms?";
     "User confirms?" -> "Phase 2: Team setup (TeamCreate, session dir, session_start event)" [label="yes"];
     "User confirms?" -> "Cleanup: TeamDelete, manifest, delete sentinel" [label="cancel"];
-    "Phase 2: Team setup (TeamCreate, session dir, session_start event)" -> "Phase 3: Spawn personas in parallel, poll for files";
+    "Phase 2: Team setup (TeamCreate, session dir, session_start event)" -> "Phase 2.5: Scout — context-brief.json";
+    "Phase 2.5: Scout — context-brief.json" -> "Phase 3: Spawn personas in parallel, poll for files";
     "Phase 3: Spawn personas in parallel, poll for files" -> "Validate output, write coherence_finding events";
     "Validate output, write coherence_finding events" -> "Post-phase directory audit";
     "Post-phase directory audit" -> "Standard or Deep tier?";
@@ -152,7 +154,7 @@ In Spectra-aware mode:
    - If the file exists but fails JSON parse: surface error "synthesis-brief.json is malformed.
      Use Standalone mode instead?" and offer the user a choice to switch modes.
    - If parse succeeds, extract:
-     - `decision_question` (or `review_target` for code-review sessions) → use as `original_intent`
+     - `decision_question` (or `review_target` for peer-review sessions) → use as `original_intent`
      - `recommended_option` + `key_debate_pivot` → use as `current_state_summary`
      - `conditions_and_assumptions` + `risks` → use as `constraints`
 2. Optionally read the skill-specific event log (`decision-events.jsonl`, `review-events.jsonl`, or `coherence-events.jsonl`) for full session history context
@@ -232,6 +234,7 @@ Include a timestamp to ensure uniqueness across sessions.
 ~/.spectra/sessions/coherence-monitor/{topic}-{timestamp}/
   session.lock
   coherence-events.jsonl
+  context-brief.json
   opening/
     alignment-auditor.json
     contradiction-detector.json
@@ -293,6 +296,39 @@ error if missing.
       {agent count} agents spawning ({tier} tier)
 ```
 
+## Phase 2.5: Scout — Context Gathering
+
+Spawn the Scout agent immediately after creating the session directory structure. The Scout
+gathers context about the work being audited so personas do not redundantly re-gather it.
+
+**Scout agent configuration:** Follow `~/.claude/skills/shared/orchestration.md > Scout Agent`
+for the full agent config, polling pattern, and prompt template.
+
+**Scout gather instructions for coherence-monitor:**
+
+- Read `CLAUDE.md` in the project root (project goals, conventions, constraints). If absent, note that.
+- Identify the input mode: checkpoint (agent self-check) or session-artifact (Spectra session output)
+- Extract the original goal from the user's request or the session artifact's stated purpose
+- If a session artifact path was provided, read it — note completed phases, key decisions made,
+  and any stated next steps
+- Summarize what work has been completed so far based on what was provided
+
+**`skill_context` schema for coherence-monitor:**
+
+```json
+{
+  "input_mode": "checkpoint|session-artifact",
+  "original_goal": "What the work was supposed to accomplish",
+  "work_summary": "Summary of work completed so far",
+  "phases_completed": ["Phase 1", "Phase 2"]
+}
+```
+
+**Output:** `{session_directory}/context-brief.json`
+
+Poll using Glob for `{session_directory}/context-brief.json` (60s timeout, ~10s cadence).
+After the file arrives, proceed to Phase 3.
+
 ## Phase 3: Opening Round
 
 The moderator drives this phase directly:
@@ -320,6 +356,12 @@ The moderator drives this phase directly:
 
 ```
 {persona file contents}
+
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your analysis.
+This file contains pre-gathered context about the work being audited, the original goal,
+and what has been completed so far. You may search for additional details if needed.
 
 ## Your Task
 You are a member of a Coherence Monitor audit panel. Your job is to evaluate the following
@@ -366,7 +408,9 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 ## Rules
 - Write ONLY to the path specified above — do not create any other files
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - After writing your file, you are done — do not wait for further instructions
 ```
 
@@ -415,6 +459,12 @@ finding counts per Persistence Protocol. Log `checkpoint_written` event.
 
 ```
 {persona file contents}
+
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your analysis.
+This file contains pre-gathered context about the work being audited, the original goal,
+and what has been completed so far. You may search for additional details if needed.
 
 ## Discussion Context
 You are participating in round {n} of the Coherence Monitor audit panel.
@@ -469,7 +519,9 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 ## Rules
 - Write ONLY to the path specified above — do not create any other files
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - After writing your file, you are done — do not wait for further instructions
 ```
 
@@ -523,7 +575,7 @@ Once auditing is complete:
 7. **Post-synthesis directory audit**: Validate the session directory against the file-write
    allowlist:
    - Allowed files: `coherence-events.jsonl`, `session.lock`, `session-state.md`,
-     `coherence-report.json`, `coherence-report.md`
+     `context-brief.json`, `coherence-report.json`, `coherence-report.md`
    - Allowed directories and contents: `opening/*.json`,
      `discussion/round-*/{agent-name}.json`
    - Any unexpected file triggers a `security_violation` event and user warning
@@ -609,6 +661,7 @@ Runtime session directory:
   session.lock
   session-state.md
   coherence-events.jsonl
+  context-brief.json
   opening/
     alignment-auditor.json
     contradiction-detector.json

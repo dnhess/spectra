@@ -23,6 +23,7 @@ Each session creates this directory structure:
 {sessions_root}/{topic}-{timestamp}/
   session.lock                    # Lock file with TTL
   {event-log}.jsonl               # Moderator-only JSONL event log
+  context-brief.json              # Scout output — pre-gathered project/subject context
   synthesis-brief.json            # Produced by moderator from agent files
   composition-request.json        # Optional: written by moderator when composing with another skill
   session-state.md                # Compaction-resilient checkpoint (overwritten each phase transition)
@@ -57,6 +58,111 @@ Files are the source of truth during a session. SQLite is the source of truth fo
 
 **Migration note:** During the transition period, SKILL.md phases should write session data to both the manifest JSONL file (backward compatibility) and the SQLite sessions table. Once all consumers migrate to SQLite queries, manifest writes become optional.
 
+## Scout Agent — Pre-Session Context Gathering
+
+Every skill runs a Scout agent before its Opening Round. The Scout gathers project and subject
+context into `context-brief.json`, which all main agents read before starting their analysis.
+This saves tokens by avoiding redundant context-gathering across N agents.
+
+### Scout Agent Configuration
+
+```
+subagent_type: general-purpose
+mode:          bypassPermissions
+model:         sonnet
+max_turns:     15
+run_in_background: true
+```
+
+### Output File
+
+`{session_directory}/context-brief.json`
+
+### Standard Schema
+
+```json
+{
+  "skill": "<skill-name>",
+  "project": {
+    "root": "/absolute/path/to/project",
+    "stack": ["typescript", "react"],
+    "conventions": "Summary of CLAUDE.md conventions and key patterns",
+    "manifest_files": ["package.json", "tsconfig.json"]
+  },
+  "subject": {
+    "description": "What this session is analyzing",
+    "relevant_files": ["path/to/file1"],
+    "constraints": ["Must support X", "Budget under Y"]
+  },
+  "skill_context": {}
+}
+```
+
+The `skill_context` field is skill-specific. Each skill's SKILL.md defines its own `skill_context`
+shape and Scout gather instructions.
+
+### Read Boundaries
+
+Enforce these in the Scout prompt:
+
+- ONLY read files within the project working directory
+- NEVER read dotfiles (`.env`, `.git/config`, `.ssh/`, etc.)
+- NEVER read files above the project root
+- NEVER read `node_modules/`, `__pycache__/`, or build output directories
+
+### Polling
+
+Glob for `{session_directory}/context-brief.json`. Timeout: 60 seconds. Poll every ~10 seconds.
+
+### Agent Prompt Header
+
+Inject this block at the top of every main agent's prompt (after persona, before task):
+
+````
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your analysis.
+This file contains pre-gathered project conventions, stack, and subject context.
+You may search the codebase for additional details if needed — the file covers
+the essentials but is not exhaustive.
+````
+
+### Scout Prompt Template
+
+Each skill's SKILL.md fills in the `{placeholders}`. The Scout itself is a `general-purpose`
+subagent in `bypassPermissions` mode.
+
+````
+You are a context scout for a {skill-name} session.
+
+Your job: gather project and subject context and write it to a single JSON file.
+Do not perform any analysis — only gather and summarize facts.
+
+## Output File
+
+Write your output to: `{session_directory}/context-brief.json`
+
+Use:
+  python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{session_directory}/context-brief.json"
+
+## What to Gather
+
+{skill-specific gather instructions — defined per skill in SKILL.md}
+
+## Schema
+
+{paste the standard schema above with skill_context filled in for this skill}
+
+## Read Boundaries
+
+- ONLY read files within the project working directory
+- NEVER read dotfiles (.env, .git/config, .ssh/, etc.)
+- NEVER read above the project root
+- NEVER read node_modules/, __pycache__/, or build output directories
+
+After writing your file, you are done — do not wait for further instructions.
+````
+
 ## Agent Prompt Template (Base)
 
 Every agent prompt across all skills follows this structure. Skills customize the task-specific sections.
@@ -89,7 +195,9 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials).
   You may read files within the project working directory and session directory as
   needed for your task
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - Read the source material at: {source_file_path}
 - After writing your file, you are done — do not wait for further instructions
 ```

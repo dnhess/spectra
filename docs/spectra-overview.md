@@ -11,13 +11,13 @@
 
 ## What It Does
 
-Spectra provides three Claude Code skills that stress-test ideas, designs, and code from multiple expert perspectives before implementation or commit. Each skill spawns a panel of specialist agents who review independently, debate across discussion rounds, and produce a synthesized output.
+Spectra provides five Claude Code skills that stress-test ideas, designs, decisions, and code from multiple expert perspectives before implementation or commit. Each skill spawns a panel of specialist agents who review independently, debate across discussion rounds, and produce a synthesized output.
 
 **Core Philosophy:** Every perspective refracted, every angle examined.
 
 ---
 
-## The Three Skills
+## Skills
 
 ### `deep-design` (v4.0)
 Rigorous multi-perspective **design review** for documents, specs, architecture proposals, and feature proposals. Agents review independently, debate, and produce a revised document incorporating all findings.
@@ -33,14 +33,26 @@ Structured multi-perspective **debate** for architectural decisions, technology 
 - **9 specialist debaters:** Technical Writer, Security Expert, Performance SRE, API Designer, Distributed Systems Expert, Migration Expert, and more
 - **Output:** ADR with rationale, alternatives considered, and dissenting views
 
-### `code-review` (v1.0)
+### `peer-review` (v1.0)
 Multi-perspective **code review** for PRs, feature branches, and module rewrites. Includes a unique reconnaissance phase (Scout + Research) that gathers codebase context and best practices before reviewers begin.
 
 - **6 core reviewers:** Reliability Engineer, Security Auditor, Performance Analyst, Design Critic, Maintainability Advocate, Test Strategist
 - **6 specialist reviewers:** Accessibility Auditor, API Designer, Concurrency Expert, Database Expert, Frontend Architect, Infrastructure Reviewer
 - **Output:** Prioritized findings with recommended actions
 
-### Cost Tiers (all three skills)
+### `trust-layer` (v1.0)
+Adversarial verification for AI-generated output. Four personas (Package Validator, Intent Auditor, Security Challenger, Coherence Checker) independently challenge code, diffs, files, or Spectra session artifacts before acceptance.
+
+- **4 core personas:** Package Validator, Intent Auditor, Security Challenger, Coherence Checker
+- **Output:** Trust verdict with findings, severity ratings, and accept/reject recommendation
+
+### `coherence-monitor` (v1.0)
+Metacognitive audit for long-running agent work. Four personas check whether work is still answering the original question, internally consistent, respecting constraints, and heading toward the goal.
+
+- **4 core personas:** Alignment Auditor, Contradiction Detector, Constraint Monitor, Devil's Examiner
+- **Output:** Coherence verdict with drift findings and corrective recommendations
+
+### Cost Tiers (all skills)
 
 | Tier | Use Case |
 |---|---|
@@ -68,6 +80,7 @@ Spawned Agents ──(Write JSON)──► Session Directory ◄──(Glob/Read
 ```
 ~/.spectra/sessions/{skill}/{topic}-{timestamp}/
   session.lock                  # TTL-based lock
+  context-brief.json            # Scout output — pre-gathered project/subject context
   {skill}-events.jsonl          # Moderator-written event log
   synthesis-brief.json          # Moderator summary of agent outputs
   session-state.md              # Compaction-resilient checkpoint
@@ -134,10 +147,18 @@ spectra/
 │   ├── SKILL.md                    # Full orchestration spec
 │   ├── event-schemas.md            # Domain-specific events
 │   └── personas/                   # 7 core + 9 specialist debaters
-├── code-review/
+├── peer-review/
 │   ├── SKILL.md                    # Full orchestration spec (78 KB)
 │   ├── event-schemas.md            # Domain-specific events
 │   └── personas/                   # 6 core + 6 specialist reviewers
+├── trust-layer/
+│   ├── SKILL.md                    # Full orchestration spec
+│   ├── event-schemas.md            # Domain-specific events
+│   └── personas/                   # 4 core verification personas
+├── coherence-monitor/
+│   ├── SKILL.md                    # Full orchestration spec
+│   ├── event-schemas.md            # Domain-specific events
+│   └── personas/                   # 4 core audit personas
 ├── test/                           # 23 BATS test files
 │   ├── *.bats
 │   ├── helpers/                    # Python validators + BATS setup
@@ -156,11 +177,11 @@ spectra/
 
 ## Shared Infrastructure
 
-All three skills share a common orchestration backbone in `shared/`:
+All skills share a common orchestration backbone in `shared/`:
 
 | File | Purpose |
 |---|---|
-| `orchestration.md` | Master protocol: blackboard pattern, session lifecycle, agent spawning, context budget monitoring, emergency shutdown, round summarization, compaction recovery |
+| `orchestration.md` | Master protocol: blackboard pattern, session lifecycle, Scout agent template, agent spawning, context budget monitoring, emergency shutdown, round summarization, compaction recovery |
 | `event-schemas-base.md` | Common JSONL event types: `session_start`, `phase_transition`, `agent_complete`, `session_complete`, `session_end`, `context_budget_status`, `security_violation`, `composition_invoked` |
 | `security.md` | 4-layer defense model (see below) |
 | `composition.md` | Inter-skill invocation protocol (e.g., deep-design → decision-board for deadlocked topics) |
@@ -317,5 +338,5 @@ GitHub Actions blocks merge if:
 | `shared/tools/validate-output.sh` | 5-stage validation pipeline |
 | `deep-design/SKILL.md` | Deep design skill full spec |
 | `decision-board/SKILL.md` | Decision board skill full spec |
-| `code-review/SKILL.md` | Code review skill full spec (78 KB) |
+| `peer-review/SKILL.md` | Code review skill full spec (78 KB) |
 | `docs/plans/2026-03-01-product-strategy-directions.md` | Strategic direction analysis |

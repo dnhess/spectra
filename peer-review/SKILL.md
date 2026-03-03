@@ -1,15 +1,15 @@
 ---
-name: code-review
+name: peer-review
 description: Use when code needs multi-perspective review before merge. Triggers include PRs, feature branches, module rewrites, or when the user wants to stress-test code quality from every angle. NOT for reviewing documents (use deep-design for that).
 ---
 
-# Code Review Board v1.0
+# Peer Review Board v1.0
 
 ## Compaction Recovery
 
 If you're reading this after context compression, check for an active session:
 
-1. Look for `~/.spectra/.active-code-review-session`
+1. Look for `~/.spectra/.active-peer-review-session`
 2. If it exists, read `session-state.md` inside the session directory it points to
 3. Validate the session lock file has not expired
 4. Resume from the phase indicated in `session-state.md`
@@ -30,7 +30,7 @@ If no active session exists, start fresh.
 
 Orchestrates a team of expert reviewer agents who conduct a structured, multi-perspective code review using a blackboard architecture. Agents write structured JSON files to a shared session directory; the moderator polls for file existence, reads results, and writes all events to the JSONL log. Reviewers independently analyze code, debate contested findings in discussion rounds, and produce a severity-ranked findings list.
 
-A reconnaissance phase (scout + research) gathers codebase context and current best practices before reviewers begin. This is unique to code-review — other Spectra skills do not have a pre-review intelligence-gathering phase.
+A reconnaissance phase (scout + research) gathers codebase context and current best practices before reviewers begin. This is unique to peer-review — other Spectra skills do not have a pre-review intelligence-gathering phase.
 
 Reviews operate in one of three cost tiers (Quick, Standard, Deep) auto-selected based on target size, with user override.
 
@@ -61,7 +61,7 @@ Detect which mode was provided and adapt accordingly.
 ## Process
 
 ```dot
-digraph code_review {
+digraph peer_review {
     rankdir=TB;
 
     "Phase 0: Context preparation" [shape=box];
@@ -76,7 +76,7 @@ digraph code_review {
 
     "Phase 1: Reconnaissance" [shape=box, style=bold];
     "Scout agent gathers context" [shape=box];
-    "Scout produces context-bundle.json" [shape=box];
+    "Scout produces context-brief.json" [shape=box];
     "Quick tier?" [shape=diamond];
     "Research agent queries best practices" [shape=box];
     "Research produces research-brief.json" [shape=box];
@@ -125,8 +125,8 @@ digraph code_review {
 
     "Setup: dir structure, session lock, sentinel" -> "Phase 1: Reconnaissance";
     "Phase 1: Reconnaissance" -> "Scout agent gathers context";
-    "Scout agent gathers context" -> "Scout produces context-bundle.json";
-    "Scout produces context-bundle.json" -> "Quick tier?";
+    "Scout agent gathers context" -> "Scout produces context-brief.json";
+    "Scout produces context-brief.json" -> "Quick tier?";
     "Quick tier?" -> "Post-recon gate" [label="yes (skip research)"];
     "Quick tier?" -> "Research agent queries best practices" [label="no"];
     "Research agent queries best practices" -> "Research produces research-brief.json";
@@ -239,7 +239,7 @@ See `~/.claude/skills/shared/security.md` for the complete security model.
 
 | Agent Role | subagent_type | mode | Rationale |
 |---|---|---|---|
-| Scout agent | `general-purpose` | `bypassPermissions` | Must write context-bundle.json to session directory |
+| Scout agent | `general-purpose` | `bypassPermissions` | Must write context-brief.json to session directory |
 | Research agent | `general-purpose` | `bypassPermissions` | Must write research-brief.json to session directory |
 | Review agents | `general-purpose` | `bypassPermissions` | Must write JSON output files to session directory |
 | Synthesis agent | `general-purpose` | `bypassPermissions` | Must write review-findings.md to session directory |
@@ -339,7 +339,7 @@ Core reviewers are selected by tier. The 6 core reviewers are: Design Critic, Re
 Before spawning any agents, present a structured confirmation prompt using `AskUserQuestion`:
 
 ```
---- Code Review ---
+--- Peer Review ---
 
 Target: {path/branch} ({mode}, {lines} lines, {files} files)
 Suggested tier: {tier}
@@ -376,11 +376,15 @@ Content injection follows the 2000-character cap with content sanitization as de
 
 ## Phase 1: Reconnaissance
 
+This phase implements the shared Scout agent pattern defined in
+`~/.claude/skills/shared/orchestration.md > Scout Agent`. peer-review's
+gather instructions and `skill_context` are defined below.
+
 Reconnaissance gathers codebase context and current best practices before reviewers begin. This phase has two steps: Scout (always runs) and Research (skipped for Quick tier).
 
 ### Phase 1, Step 1 — Scout
 
-The scout agent explores the review target and produces a structured context bundle.
+The scout agent explores the review target and produces a structured context brief.
 
 **Agent configuration:**
 
@@ -397,49 +401,43 @@ The scout agent explores the review target and produces a structured context bun
 - NEVER read files above the project root
 - NEVER read `node_modules/`, `__pycache__/`, or build output directories
 
-**Output**: `{session_directory}/recon/context-bundle.json`
+**Output**: `{session_directory}/context-brief.json`
 
 ```json
 {
-  "target": {
-    "mode": "diff|module",
-    "path": "src/auth/service.ts",
-    "diff_range": "main..feature/auth-refactor"
+  "skill": "peer-review",
+  "project": {
+    "root": "/absolute/path/to/project",
+    "stack": ["typescript", "react"],
+    "conventions": "Summary of CLAUDE.md conventions and key patterns",
+    "manifest_files": ["package.json", "tsconfig.json"]
   },
-  "technologies": [
-    {
-      "name": "react",
-      "version": "18.3",
-      "source": "package.json",
-      "confidence": "high"
+  "subject": {
+    "description": "Code review of {mode}: {path}",
+    "relevant_files": ["src/auth/service.ts", "src/auth/types.ts"],
+    "constraints": []
+  },
+  "skill_context": {
+    "target": {
+      "mode": "diff|module",
+      "path": "src/auth/service.ts",
+      "diff_range": "main..feature/auth"
     },
-    {
-      "name": "typescript",
-      "version": "5.4",
-      "source": "tsconfig.json",
-      "confidence": "high"
+    "files": {
+      "primary": ["src/auth/service.ts"],
+      "related": ["src/auth/types.ts"],
+      "tests": ["tests/auth/service.test.ts"]
+    },
+    "test_coverage": {
+      "has_tests": true,
+      "test_count": 12,
+      "gaps": ["error paths untested"]
     }
-  ],
-  "files": {
-    "primary": ["src/auth/service.ts"],
-    "related": ["src/auth/types.ts", "src/auth/middleware.ts"],
-    "tests": ["tests/auth/service.test.ts"],
-    "config": ["tsconfig.json"]
-  },
-  "conventions": {
-    "patterns": ["barrel exports", "dependency injection"],
-    "test_framework": "vitest",
-    "style": "functional, minimal classes"
-  },
-  "test_coverage": {
-    "has_tests": true,
-    "test_count": 12,
-    "gaps": ["error paths untested"]
   }
 }
 ```
 
-**Polling**: Glob for `{session_directory}/recon/context-bundle.json`, timeout 60 seconds. Poll every ~10 seconds.
+**Polling**: Glob for `{session_directory}/context-brief.json`, timeout 60 seconds. Poll every ~10 seconds.
 
 #### Scout Agent Prompt Template
 
@@ -450,7 +448,7 @@ The scout agent explores the review target and produces a structured context bun
 You are a codebase scout for a code review session.
 
 ## Your Task
-Explore the target code and produce a context bundle that gives reviewers
+Explore the target code and produce a context brief that gives reviewers
 the context they need to deliver high-quality findings.
 
 Target: {review_target}
@@ -458,7 +456,7 @@ Mode: {review_mode}
 Working directory: {working_directory}
 
 Write your output as a JSON file to:
-  `{session_directory}/recon/context-bundle.json`
+  `{session_directory}/context-brief.json`
 
 ## What to Gather
 
@@ -500,34 +498,34 @@ Write your output as a JSON file to:
 
 ## Output Schema
 {
-  "target": {
-    "mode": "diff|module",
-    "path": "string — primary file or directory path",
-    "diff_range": "string — git diff range (null for module mode)"
+  "skill": "peer-review",
+  "project": {
+    "root": "string — absolute path to project root",
+    "stack": ["string — technology name and version"],
+    "conventions": "string — summary of CLAUDE.md conventions and key patterns",
+    "manifest_files": ["string — relevant manifest files found"]
   },
-  "technologies": [
-    {
-      "name": "string — technology name",
-      "version": "string — detected version",
-      "source": "string — file where version was found",
-      "confidence": "high|medium|low"
+  "subject": {
+    "description": "string — Code review of {mode}: {path}",
+    "relevant_files": ["string — files directly involved in review"],
+    "constraints": ["string — any constraints or scope limits"]
+  },
+  "skill_context": {
+    "target": {
+      "mode": "diff|module",
+      "path": "string — primary file or directory path",
+      "diff_range": "string — git diff range (null for module mode)"
+    },
+    "files": {
+      "primary": ["string — files directly under review"],
+      "related": ["string — files that import/export with primary"],
+      "tests": ["string — test files for primary"]
+    },
+    "test_coverage": {
+      "has_tests": "boolean",
+      "test_count": "number",
+      "gaps": ["string — identified coverage gaps"]
     }
-  ],
-  "files": {
-    "primary": ["string — files directly under review"],
-    "related": ["string — files that import/export with primary"],
-    "tests": ["string — test files for primary"],
-    "config": ["string — relevant config files"]
-  },
-  "conventions": {
-    "patterns": ["string — detected coding patterns"],
-    "test_framework": "string — test framework name",
-    "style": "string — overall coding style description"
-  },
-  "test_coverage": {
-    "has_tests": "boolean",
-    "test_count": "number",
-    "gaps": ["string — identified coverage gaps"]
   }
 }
 
@@ -540,15 +538,17 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 
 ## Rules
 - Write ONLY to the path specified above — do not create any other files
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - After writing your file, you are done — do not wait for further instructions
 ```
 
 ### Phase 1, Step 2 — Research
 
-The research agent takes the detected technologies from the context bundle and searches for current best practices, deprecation notices, and known issues. This provides reviewers with up-to-date external knowledge.
+The research agent takes the detected technologies from the context brief and searches for current best practices, deprecation notices, and known issues. This provides reviewers with up-to-date external knowledge.
 
-**Skipped for Quick tier.** Quick reviews rely solely on the scout's context bundle.
+**Skipped for Quick tier.** Quick reviews rely solely on the scout's context brief.
 
 **Agent configuration:**
 
@@ -558,7 +558,7 @@ The research agent takes the detected technologies from the context bundle and s
 - `max_turns`: 18
 - `run_in_background`: true
 
-**Input**: Reads `{session_directory}/recon/context-bundle.json` and extracts the `technologies` array.
+**Input**: Reads `{session_directory}/context-brief.json` and extracts the `project.stack` array.
 
 **Two-pass pattern**: The research agent first collects raw search results, then performs a second pass to sanitize and structure the output. This ensures consistent formatting and removes noise from web search results.
 
@@ -568,7 +568,7 @@ The research agent takes the detected technologies from the context bundle and s
 
 **Content isolation**: All web-sourced content is treated as untrusted external input. The research agent wraps web content in randomized delimiters during processing. See `~/.claude/skills/shared/security.md` for the delimiter pattern.
 
-**Output**: `{session_directory}/recon/research-brief.json`
+**Output**: `{session_directory}/research-brief.json`
 
 ```json
 {
@@ -609,7 +609,7 @@ The research agent takes the detected technologies from the context bundle and s
 }
 ```
 
-**Polling**: Glob for `{session_directory}/recon/research-brief.json`, timeout 60 seconds. Poll every ~10 seconds.
+**Polling**: Glob for `{session_directory}/research-brief.json`, timeout 60 seconds. Poll every ~10 seconds.
 
 #### Research Agent Prompt Template
 
@@ -628,7 +628,7 @@ Technologies to research:
 {technology_list}
 
 Write your output as a JSON file to:
-  `{session_directory}/recon/research-brief.json`
+  `{session_directory}/research-brief.json`
 
 ## Research Process
 1. For each technology in the list above, search for:
@@ -671,16 +671,18 @@ Write your output as a JSON file to:
 
 ## Rules
 - Write ONLY to the path specified above — do not create any other files
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - Tag ALL web-sourced content with source_url and retrieved_at
 - After writing your file, you are done — do not wait for further instructions
 ```
 
 ### Phase Boundary Validation (Recon to Opening)
 
-Before proceeding from Phase 1 to Phase 2, the moderator validates `context-bundle.json`:
+Before proceeding from Phase 1 to Phase 2, the moderator validates `context-brief.json`:
 
-1. **Required fields**: The `technologies` array and `files.primary` array must exist and be non-empty.
+1. **Required fields**: The `project.stack` array and `skill_context.files.primary` array must exist and be non-empty.
 2. **Technology name validation**: Each technology name is validated against the regex `^[a-zA-Z0-9._@/-]{1,100}$`. Non-conforming entries are stripped before passing to the research agent.
 3. **On validation failure**: Abort the session with a clear error message surfaced to the user. Write a `session_end` event with quality `Minimal` and reason `recon_validation_failed`.
 
@@ -730,7 +732,7 @@ Opening review is the core analysis phase. Reviewer agents independently analyze
 Create the team and session directory:
 
 ```
-TeamCreate: code-review-{target}-{timestamp}
+TeamCreate: peer-review-{target}-{timestamp}
 ```
 
 Include a timestamp (e.g., `20260301T160514`) for uniqueness.
@@ -738,11 +740,12 @@ Include a timestamp (e.g., `20260301T160514`) for uniqueness.
 **Session directory** — create at:
 
 ```
-~/.spectra/sessions/code-review/{session_name}/
+~/.spectra/sessions/peer-review/{session_name}/
   session.lock
   review-events.jsonl
   session-state.md
-  recon/
+  context-brief.json
+  research-brief.json
   opening/
   discussion/
   final-positions/
@@ -756,7 +759,7 @@ Write a session lock file at `{session_directory}/session.lock`:
 
 ```json
 {
-  "session_id": "code-review-{target}-{timestamp}",
+  "session_id": "peer-review-{target}-{timestamp}",
   "pid": 12345,
   "started_at": "ISO-8601",
   "ttl_minutes": 30,
@@ -774,7 +777,7 @@ TTL values by tier:
 
 ### Write Session Start Event
 
-Write a `session_start` event to the JSONL log with code-review extensions (see `code-review/event-schemas.md`):
+Write a `session_start` event to the JSONL log with peer-review extensions (see `peer-review/event-schemas.md`):
 
 ```json
 {
@@ -811,15 +814,21 @@ For each reviewer, spawn an agent with:
 ### Opening Review Agent Prompt Template
 
 <!-- Template: Persona | Project Context | Prior Session Context (if available, SEMI-TRUSTED, delimited) |
-     Context Bundle + Research Brief | Task + Schema | WebSearch Guidelines (enhanced) | Rules.
+     Context Brief + Research Brief | Task + Schema | WebSearch Guidelines (enhanced) | Rules.
      All content trusted except prior session handoff. -->
 
 ```
-{persona file contents from ~/.claude/skills/code-review/personas/{reviewer-name}.md}
+{persona file contents from ~/.claude/skills/peer-review/personas/{reviewer-name}.md}
+
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your review.
+This file contains pre-gathered project conventions, stack, and code target context.
+You may search the codebase for additional details if needed.
 
 ## Project Context
 {CLAUDE.md conventions if available}
-{Detected stack from context-bundle}
+{Detected stack from context-brief.json}
 
 {If prior session context is available — see Persistence Protocol:}
 ## Prior Session Context
@@ -829,9 +838,9 @@ For each reviewer, spawn an agent with:
 Mode: {diff|module}
 Target: {review_target}
 
-Read the target code at the file paths listed in the context bundle.
-Context bundle: {session_directory}/recon/context-bundle.json
-Research brief: {session_directory}/recon/research-brief.json (read this for current best practices)
+Read the target code at the file paths listed in the context brief.
+Context brief: {session_directory}/context-brief.json
+Research brief: {session_directory}/research-brief.json (read this for current best practices)
 
 ## WebSearch Guidelines
 You may use WebSearch for targeted deep dives on specific issues you encounter.
@@ -868,7 +877,9 @@ Schema:
 ## Rules
 - Write ONLY to the path above — do not create any other files
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
-- Use python3 for JSON serialization: python3 -c "import json; ..."
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - Generate a unique UUID for each finding ID
 - After writing your file, you are done — do not wait for further instructions
 ```
@@ -893,7 +904,7 @@ After all reviewer files arrive (or timeout with quorum met):
 
 1. **Read** each reviewer's JSON file from `opening/`.
 2. **Validate** each finding: must have `id`, `severity`, and `file_path`. Skip findings missing any required field and log a warning.
-3. **Write `finding` events** to the JSONL log for each valid finding (see `code-review/event-schemas.md` for the schema).
+3. **Write `finding` events** to the JSONL log for each valid finding (see `peer-review/event-schemas.md` for the schema).
 4. **Write `agent_complete` events** for each reviewer (completed or timed out).
 
 ### Post-Phase Directory Audit
@@ -902,10 +913,10 @@ Snapshot the session directory after the opening phase. Any unexpected files in 
 
 ### Specialist Recommendations
 
-After the opening round, the moderator analyzes findings and context-bundle technologies to recommend specialists:
+After the opening round, the moderator analyzes findings and context-brief stack to recommend specialists:
 
 - If **2 or more reviewers** flag issues in a specialist domain, recommend that specialist.
-- Check `~/.claude/skills/code-review/personas/specialists/` for pre-built specialist personas.
+- Check `~/.claude/skills/peer-review/personas/specialists/` for pre-built specialist personas.
 - Present recommendations to the user for approval.
 - Maximum specialists by tier:
 
@@ -942,7 +953,7 @@ After the opening round (and optional specialist reviews), the moderator extract
 }
 ```
 
-5. **Write `topic_created` events** to the JSONL log for each topic (see `code-review/event-schemas.md`).
+5. **Write `topic_created` events** to the JSONL log for each topic (see `peer-review/event-schemas.md`).
 
 ### Opening Summary
 
@@ -1024,7 +1035,13 @@ Fresh agents per round (NOT reusing opening agents).
 Full prompt template:
 
 ```
-{persona file contents from ~/.claude/skills/code-review/personas/{reviewer-name}.md}
+{persona file contents from ~/.claude/skills/peer-review/personas/{reviewer-name}.md}
+
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your review.
+This file contains pre-gathered project conventions, stack, and code target context.
+You may search the codebase for additional details if needed.
 
 ## Discussion Context
 You are participating in round {n} of a code review discussion.
@@ -1071,11 +1088,13 @@ Schema:
 ## Rules
 - Write ONLY to the path above — do not create any other files
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
-- Do NOT use WebSearch — base your arguments on code, context bundle, and research brief only
-- Use python3 for JSON serialization
+- Do NOT use WebSearch — base your arguments on code, context brief, and research brief only
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - You may ONLY withdraw or modify findings you originally authored
 - You may challenge or uphold any finding
-- Base your arguments on the code, context bundle, and research brief — not speculation
+- Base your arguments on the code, context brief, and research brief — not speculation
 - After writing your file, you are done
 ```
 
@@ -1176,7 +1195,7 @@ What should we do?
    - **3 (Modify)**: Moderator prompts for new severity. Write `finding_modified` event with the new severity and `escalation_resolved` event.
    - **f (Free-form)**: User provides a free-text resolution. Write `escalation_resolved` event with the user's text as the decision.
 
-3. Moderator writes `escalation_resolved` event (see `code-review/event-schemas.md` for schema).
+3. Moderator writes `escalation_resolved` event (see `peer-review/event-schemas.md` for schema).
 
 ### Post-Phase Processing
 
@@ -1231,7 +1250,13 @@ Fresh agents per reviewer (NOT reusing discussion agents). One agent per reviewe
      Task + Schema | WebSearch Guidelines (base) | Rules. Discussion outcomes are moderator-curated. -->
 
 ```
-{persona file contents from ~/.claude/skills/code-review/personas/{reviewer-name}.md}
+{persona file contents from ~/.claude/skills/peer-review/personas/{reviewer-name}.md}
+
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your review.
+This file contains pre-gathered project conventions, stack, and code target context.
+You may search the codebase for additional details if needed.
 
 ## Session Context
 You participated in a code review of {review_target}.
@@ -1275,7 +1300,9 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
 ## Rules
 - Write ONLY to the path above
 - Do NOT read sensitive system files (e.g., ~/.ssh/, ~/.env, ~/.aws/, credentials)
-- Use python3 for JSON serialization
+- Write your output using:
+  `python3 -c "import json; print(json.dumps({...your_data...}))" | bash ~/.spectra/bin/json-write.sh "{output_path}"`
+  (validates JSON, atomic write, enforces path constraints)
 - Include only findings in open, upheld, or modified state
 - Do NOT include withdrawn findings in top_findings
 - After writing your file, you are done
@@ -1299,7 +1326,7 @@ At least one finding must be in `open`, `upheld`, or `modified` state across all
 ### Post-Phase Processing
 
 1. **Read** all final position files from `final-positions/`.
-2. **Write `final_position` events** to the JSONL log — one event per reviewer with their top findings (see `code-review/event-schemas.md` for schema).
+2. **Write `final_position` events** to the JSONL log — one event per reviewer with their top findings (see `peer-review/event-schemas.md` for schema).
 3. **Write `agent_complete` events** for each final position agent.
 4. **Post-phase directory audit** on `final-positions/`. Any unexpected files (not matching the expected `{reviewer-name}.json` pattern) trigger a `security_violation` event. See `~/.claude/skills/shared/security.md` for the audit protocol.
 5. **Write `phase_transition` event** to proceed to Phase 5 (Synthesis).
@@ -1428,7 +1455,7 @@ The synthesis agent:
 The synthesis agent produces `review-findings.md` with this structure:
 
 ```markdown
-# Code Review Findings — {review_target}
+# Peer Review Findings — {review_target}
 
 **Date:** {date}
 **Tier:** {tier}
@@ -1482,7 +1509,7 @@ Quick tier skips discussion and final positions. Synthesis reads directly from `
 Quick tier output is a prioritized checklist rather than a full report:
 
 ```markdown
-## Code Review Checklist — {review_target}
+## Peer Review Checklist — {review_target}
 
 ### Critical
 - [ ] {title} — {file_path}:{line} ({reviewer})
@@ -1509,10 +1536,11 @@ After the synthesis agent completes, validate the entire session directory again
 - `session.lock`
 - `session-state.md`
 - `review-findings.md`
+- `context-brief.json`
+- `research-brief.json`
 
 **Allowed directories and patterns**:
 
-- `recon/*.json`
 - `opening/*.json`
 - `discussion/round-*/*.json`
 - `discussion/round-*/round-brief.json`
@@ -1640,7 +1668,7 @@ Delete `{session_directory}/session.lock`. If the file does not exist (already c
 
 ### Write Manifest Entry
 
-Append a single-line JSON entry to `~/.spectra/sessions/code-review/manifest.jsonl`. The entry includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus the domain-specific fields defined in `event-schemas.md`.
+Append a single-line JSON entry to `~/.spectra/sessions/peer-review/manifest.jsonl`. The entry includes all common manifest fields (defined in `~/.claude/skills/shared/event-schemas-base.md`) plus the domain-specific fields defined in `event-schemas.md`.
 
 Write the entry using the JSONL utility:
 
@@ -1661,11 +1689,11 @@ After writing the manifest entry, check file size and entry count:
 3. Use atomic write for truncation: write to a temp file, then rename over the original
 
 ```bash
-line_count=$(wc -l < ~/.spectra/sessions/code-review/manifest.jsonl)
-file_size=$(stat -f%z ~/.spectra/sessions/code-review/manifest.jsonl 2>/dev/null || stat -c%s ~/.spectra/sessions/code-review/manifest.jsonl 2>/dev/null)
+line_count=$(wc -l < ~/.spectra/sessions/peer-review/manifest.jsonl)
+file_size=$(stat -f%z ~/.spectra/sessions/peer-review/manifest.jsonl 2>/dev/null || stat -c%s ~/.spectra/sessions/peer-review/manifest.jsonl 2>/dev/null)
 if [ "$line_count" -gt 1000 ] || [ "$file_size" -gt 512000 ]; then
-  tail -n 750 ~/.spectra/sessions/code-review/manifest.jsonl > ~/.spectra/sessions/code-review/manifest.jsonl.tmp
-  mv ~/.spectra/sessions/code-review/manifest.jsonl.tmp ~/.spectra/sessions/code-review/manifest.jsonl
+  tail -n 750 ~/.spectra/sessions/peer-review/manifest.jsonl > ~/.spectra/sessions/peer-review/manifest.jsonl.tmp
+  mv ~/.spectra/sessions/peer-review/manifest.jsonl.tmp ~/.spectra/sessions/peer-review/manifest.jsonl
 fi
 ```
 
@@ -1687,7 +1715,7 @@ Content must be sanitized (no raw file contents, no secrets) and capped at 2000 
 ```bash
 python3 -c "
 import json, os, tempfile
-handoff = '''# Code Review Handoff
+handoff = '''# Peer Review Handoff
 
 Session: {session_id}
 Date: {timestamp}
@@ -1731,7 +1759,7 @@ Write a `handoff_written` event to the JSONL log:
 
 ### Delete Active Session Sentinel
 
-Remove the `~/.spectra/.active-code-review-session` sentinel file. This signals to future invocations that no review session is in progress.
+Remove the `~/.spectra/.active-peer-review-session` sentinel file. This signals to future invocations that no review session is in progress.
 
 If the file does not exist, continue silently.
 
@@ -1767,15 +1795,15 @@ Update the manifest entry by rewriting the line for this session with `feedback_
 
 ### Stale Session Detection
 
-On the **next** invocation of the code-review skill (not during the current cleanup), check for stale sessions before starting a new review:
+On the **next** invocation of the peer-review skill (not during the current cleanup), check for stale sessions before starting a new review:
 
-1. Check if `~/.spectra/.active-code-review-session` exists
+1. Check if `~/.spectra/.active-peer-review-session` exists
 2. If it does, read the session directory path from it
 3. Check `session.lock` inside that directory for TTL expiration
 4. If the lock has expired (timestamp + TTL < now), the previous session is stale
 5. Clean up the stale session:
    - Remove `session.lock`
-   - Remove `~/.spectra/.active-code-review-session`
+   - Remove `~/.spectra/.active-peer-review-session`
    - Write a `session_end` event with quality `Abandoned` to the stale session's JSONL log
    - Write a manifest entry with status `abandoned`
 6. Inform the user: "Cleaned up stale session from {timestamp}. Starting fresh."
@@ -1890,7 +1918,7 @@ Phase 6 cleanup always runs, even when earlier phases throw errors. The moderato
 
 ### Pre-Built Specialists
 
-Before generating a custom specialist, check `~/.claude/skills/code-review/personas/specialists/` for a matching pre-built persona. Available pre-built specialists:
+Before generating a custom specialist, check `~/.claude/skills/peer-review/personas/specialists/` for a matching pre-built persona. Available pre-built specialists:
 
 - `database-expert.md` — Database schema, query optimization, migrations
 - `api-designer.md` — API design, REST/GraphQL patterns, versioning
@@ -1929,7 +1957,7 @@ All specialists (pre-built and custom) use the same agent configuration:
 ## File Structure
 
 ```
-~/.claude/skills/code-review/
+~/.claude/skills/peer-review/
   SKILL.md
   event-schemas.md
   personas/
@@ -1955,7 +1983,7 @@ All specialists (pre-built and custom) use the same agent configuration:
   tools/
     jsonl-utils.sh
 
-~/.spectra/sessions/code-review/
+~/.spectra/sessions/peer-review/
   manifest.jsonl
 ```
 

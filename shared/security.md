@@ -84,12 +84,12 @@ with Layer 4 mitigations. Skills may opt out specific agent types by adding
 |---|---|---|
 | deep-design | All | **Allowed** (base template) |
 | decision-board | All | **Allowed** (base template) |
-| code-review | Scout | **Allowed** (base template) |
-| code-review | Research | **Allowed** (enhanced guidelines) |
-| code-review | Opening review | **Allowed** (enhanced guidelines) |
-| code-review | Discussion | **Prohibited** (explicit opt-out) |
-| code-review | Final position | **Allowed** (base template) |
-| code-review | Synthesis | **Allowed** (base template) |
+| peer-review | Scout | **Allowed** (base template) |
+| peer-review | Research | **Allowed** (enhanced guidelines) |
+| peer-review | Opening review | **Allowed** (enhanced guidelines) |
+| peer-review | Discussion | **Prohibited** (explicit opt-out) |
+| peer-review | Final position | **Allowed** (base template) |
+| peer-review | Synthesis | **Allowed** (base template) |
 
 **Provenance tagging:**
 Web-sourced content must carry `source_url` and `retrieved_at` metadata. Downstream agents and synthesis must surface provenance to users so they can weight web-sourced claims appropriately.
@@ -133,7 +133,7 @@ Applies to:
 - deep-design discussion templates (condensed round summary via `ROUND-SUMMARY` delimiters)
 - decision-board discussion templates (condensed round summary via `ROUND-SUMMARY` delimiters)
 - decision-board Devil's Advocate template (stances via `AGENT-STANCES` delimiters)
-- code-review discussion templates (findings + condensed summary via `REVIEW-DATA` delimiters)
+- peer-review discussion templates (findings + condensed summary via `REVIEW-DATA` delimiters)
 
 Does NOT apply to:
 

@@ -39,15 +39,15 @@ teardown() {
   [ "$count" -eq 9 ]
 }
 
-@test "code-review has exactly 6 core personas" {
+@test "peer-review has exactly 6 core personas" {
   local count
-  count=$(find "$PROJECT_ROOT/code-review/personas" -maxdepth 1 -name "*.md" | wc -l | tr -d ' ')
+  count=$(find "$PROJECT_ROOT/peer-review/personas" -maxdepth 1 -name "*.md" | wc -l | tr -d ' ')
   [ "$count" -eq 6 ]
 }
 
-@test "code-review has exactly 6 specialist personas" {
+@test "peer-review has exactly 6 specialist personas" {
   local count
-  count=$(find "$PROJECT_ROOT/code-review/personas/specialists" -maxdepth 1 -name "*.md" | wc -l | tr -d ' ')
+  count=$(find "$PROJECT_ROOT/peer-review/personas/specialists" -maxdepth 1 -name "*.md" | wc -l | tr -d ' ')
   [ "$count" -eq 6 ]
 }
 
@@ -63,7 +63,7 @@ teardown() {
       echo "FAIL: $f" >&2
       fail=1
     fi
-  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,code-review}/personas -name "*.md")
+  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,peer-review}/personas -name "*.md")
   [ "$fail" -eq 0 ]
 }
 
@@ -75,7 +75,7 @@ teardown() {
       echo "FAIL: $f" >&2
       fail=1
     fi
-  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,code-review}/personas -name "*.md")
+  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,peer-review}/personas -name "*.md")
   [ "$fail" -eq 0 ]
 }
 
@@ -86,7 +86,7 @@ teardown() {
       echo "FAIL: $f" >&2
       fail=1
     fi
-  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,code-review}/personas -name "*.md")
+  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,peer-review}/personas -name "*.md")
   [ "$fail" -eq 0 ]
 }
 
@@ -97,7 +97,7 @@ teardown() {
       echo "FAIL: $f" >&2
       fail=1
     fi
-  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,code-review}/personas -name "*.md")
+  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,peer-review}/personas -name "*.md")
   [ "$fail" -eq 0 ]
 }
 
@@ -110,7 +110,7 @@ teardown() {
       echo "FAIL ($lines lines): $f" >&2
       fail=1
     fi
-  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,code-review}/personas -name "*.md")
+  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,peer-review}/personas -name "*.md")
   [ "$fail" -eq 0 ]
 }
 
@@ -123,7 +123,7 @@ teardown() {
       echo "FAIL: $f" >&2
       fail=1
     fi
-  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,code-review}/personas -name "*.md")
+  done < <(find "$PROJECT_ROOT"/{deep-design,decision-board,peer-review}/personas -name "*.md")
   [ "$fail" -eq 0 ]
 }
 

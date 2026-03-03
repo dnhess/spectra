@@ -16,7 +16,7 @@ readonly LOCK_DIR="$SPECTRA_HOME/.settings-lock"
 readonly GITHUB_REPO="dnhess/spectra"
 
 # Known skills (update when adding new skills)
-readonly KNOWN_SKILLS=(shared deep-design decision-board code-review trust-layer coherence-monitor)
+readonly KNOWN_SKILLS=(shared deep-design decision-board peer-review trust-layer coherence-monitor)
 
 # --- Logging ---
 
@@ -393,7 +393,7 @@ verify_link_health() {
   done
 
   # Check session directories are writable
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     local dir="$SESSIONS_DIR/$skill"
     if [[ -d "$dir" ]] && [[ ! -w "$dir" ]]; then
       log_warn "Smoke test: $dir not writable"
@@ -452,13 +452,23 @@ cmd_install() {
   # Symlinks
   create_skill_symlinks "$SKILLS_DIR"
 
+  # Remove stale code-review symlink if it points into Spectra
+  if [[ -L "$CLAUDE_SKILLS_DIR/code-review" ]]; then
+    local old_target
+    old_target="$(readlink "$CLAUDE_SKILLS_DIR/code-review")"
+    if [[ "$old_target" == "$SPECTRA_HOME"/* ]] || [[ "$old_target" == *"/spectra/"* ]]; then
+      rm -f "$CLAUDE_SKILLS_DIR/code-review"
+      log_info "Removed stale code-review symlink (renamed to peer-review)"
+    fi
+  fi
+
   # Create session directories
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     mkdir -p "$SESSIONS_DIR/$skill"
   done
 
   # Migration compatibility symlinks
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     local old_path="$CLAUDE_HOME/${skill}-sessions"
     if [[ ! -e "$old_path" ]]; then
       ln -sfn "$SESSIONS_DIR/$skill" "$old_path"
@@ -542,6 +552,16 @@ cmd_update() {
   # Re-check symlinks
   create_skill_symlinks "$SKILLS_DIR"
 
+  # Remove stale code-review symlink if it points into Spectra
+  if [[ -L "$CLAUDE_SKILLS_DIR/code-review" ]]; then
+    local old_target
+    old_target="$(readlink "$CLAUDE_SKILLS_DIR/code-review")"
+    if [[ "$old_target" == "$SPECTRA_HOME"/* ]] || [[ "$old_target" == *"/spectra/"* ]]; then
+      rm -f "$CLAUDE_SKILLS_DIR/code-review"
+      log_info "Removed stale code-review symlink (renamed to peer-review)"
+    fi
+  fi
+
   # Re-merge permissions
   settings_backup
   acquire_lock
@@ -603,7 +623,7 @@ cmd_uninstall() {
   remove_spectra_symlinks
 
   # Remove compat symlinks
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     local compat="$CLAUDE_HOME/${skill}-sessions"
     if [[ -L "$compat" ]]; then
       local target
@@ -662,7 +682,7 @@ cmd_link() {
   if [[ ! -e "$BIN_DIR/spectra" ]]; then
     log_info "Bootstrapping ~/.spectra for dev setup..."
     mkdir -p "$SPECTRA_HOME"/{skills,sessions,backups,bin}
-    for skill in deep-design decision-board code-review; do
+    for skill in deep-design decision-board peer-review; do
       mkdir -p "$SESSIONS_DIR/$skill"
     done
     [[ -f "$VERSION_FILE" ]] || echo "$SPECTRA_VERSION" > "$VERSION_FILE"
@@ -701,7 +721,7 @@ cmd_link() {
 import json, os
 targets = {}
 skills_dir = os.path.expanduser('~/.claude/skills')
-for skill in ['shared', 'deep-design', 'decision-board', 'code-review']:
+for skill in ['shared', 'deep-design', 'decision-board', 'peer-review']:
     link = os.path.join(skills_dir, skill)
     if os.path.islink(link):
         targets[skill] = os.readlink(link)
@@ -851,7 +871,7 @@ cmd_status() {
 
   echo ""
   echo "  Sessions:"
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     local dir="$SESSIONS_DIR/$skill"
     if [[ -d "$dir" ]]; then
       local size
@@ -955,7 +975,7 @@ print(len(missing))
   fi
 
   # Session directories
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     local dir="$SESSIONS_DIR/$skill"
     if [[ -d "$dir" ]] && [[ -w "$dir" ]]; then
       log_success "$skill session directory OK"
@@ -989,7 +1009,7 @@ print(len(missing))
   fi
 
   # Compatibility symlinks
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     local compat="$CLAUDE_HOME/${skill}-sessions"
     if [[ -L "$compat" ]]; then
       # Check if any active sessions exist

@@ -159,7 +159,7 @@ sys.exit(1)
   # Symlinks into ~/.claude/skills/
   local claude_skills="$HOME/.claude/skills"
   mkdir -p "$claude_skills"
-  for skill in shared deep-design decision-board code-review; do
+  for skill in shared deep-design decision-board peer-review; do
     if [[ -d "$SPECTRA_HOME/skills/$skill" ]]; then
       ln -sfn "$SPECTRA_HOME/skills/$skill" "$claude_skills/$skill"
       success "Linked $skill"
@@ -167,7 +167,7 @@ sys.exit(1)
   done
 
   # Session directories + compat symlinks
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     mkdir -p "$SPECTRA_HOME/sessions/$skill"
     local old_path="$HOME/.claude/${skill}-sessions"
     if [[ ! -e "$old_path" ]]; then
@@ -236,7 +236,7 @@ print()
   echo ""
   info "Version: $version"
   info "Home:    $SPECTRA_HOME"
-  info "Skills:  shared, deep-design, decision-board, code-review"
+  info "Skills:  shared, deep-design, decision-board, peer-review"
   echo ""
   info "Run 'spectra status' to verify installation"
   info "Run 'spectra doctor' to check health"

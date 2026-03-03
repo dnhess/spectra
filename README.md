@@ -17,8 +17,8 @@ Triggers: design docs, architecture specs, product requirements, feature proposa
 
 Triggers: architectural decisions, technology selection, build-vs-buy, migration strategy.
 
-### code-review
-**Multi-perspective code review.** Use when code changes need thorough review from multiple specialist viewpoints before merge.
+### peer-review
+**Multi-perspective code review.** Use when code changes need thorough review from multiple specialist viewpoints before merge. Includes a Scout + Research reconnaissance phase that gathers codebase context and best practices before reviewers begin.
 
 Triggers: pull requests, code changes, refactoring review.
 
@@ -102,6 +102,7 @@ This replaces the previous hub-and-spoke coordinator pattern, eliminating messag
 
 Additional infrastructure:
 
+- **Scout agent** — every skill runs a pre-session Scout subagent (Phase 2.5) that writes `context-brief.json` to the session directory. Main agents read this file for project/subject context instead of re-gathering it independently, saving tokens at scale.
 - **Output validation** — 5-stage pipeline (size, JSON parse, schema, content sanitize, accept) validates all agent output before event log writes
 - **SQLite storage** (scaffolded, not yet wired) — hybrid storage layer alongside JSONL manifests for cross-session metadata queries. Schema, utilities, and tests exist but sessions do not yet populate the database. JSONL manifests are the active storage layer.
 - **Context budget monitoring** — proxy metrics tracked at every phase transition with emergency shutdown when context pressure is critical
@@ -154,7 +155,7 @@ spectra/
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
     personas/                   # 7 core + 9 specialist debaters
-  code-review/                  # Code review skill
+  peer-review/                  # Code review skill
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
     personas/                   # 6 core + 6 specialist reviewers
@@ -181,6 +182,9 @@ To add a new multi-agent skill:
    - Define handoff content mapping for your domain
    - Define which manifest field identifies repeat sessions
    - Add checkpoint timing appropriate for your session phases
-6. Add the skill name to `KNOWN_SKILLS` in `bin/spectra`
+6. **Add a Scout phase** — add a Phase 2.5 section between Team Setup and the Opening Round.
+   Define skill-specific gather instructions and a `skill_context` schema.
+   See `shared/orchestration.md > Scout Agent` for the template.
+7. Add the skill name to `KNOWN_SKILLS` in `bin/spectra`
 
-The shared infrastructure handles: session directory management, polling protocol, JSONL event writing, output validation, synthesis pipeline, fault tolerance, context budget monitoring, quality KPIs, security, and context persistence.
+The shared infrastructure handles: session directory management, Scout context-gathering, polling protocol, JSONL event writing, output validation, synthesis pipeline, fault tolerance, context budget monitoring, quality KPIs, security, and context persistence.

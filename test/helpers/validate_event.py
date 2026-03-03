@@ -40,7 +40,7 @@ KNOWN_TYPES = {
     "concession",
     "consensus_check",
     "decision_proposed",
-    # Domain events — code-review
+    # Domain events — peer-review
     "recon_complete",
     "research_complete",
     "finding",

@@ -25,7 +25,7 @@ teardown() { _common_teardown; }
   mkdir -p "$SPECTRA_HOME/skills-prev/shared"
   touch "$SPECTRA_HOME/skills-prev/shared/orchestration.md"
   echo "previous-version-marker" > "$SPECTRA_HOME/skills-prev/shared/marker.txt"
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     mkdir -p "$SPECTRA_HOME/skills-prev/$skill/personas"
     touch "$SPECTRA_HOME/skills-prev/$skill/SKILL.md"
   done
@@ -49,7 +49,7 @@ teardown() { _common_teardown; }
   # Create skills-prev with identifiable content
   mkdir -p "$SPECTRA_HOME/skills-prev/shared"
   touch "$SPECTRA_HOME/skills-prev/shared/orchestration.md"
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     mkdir -p "$SPECTRA_HOME/skills-prev/$skill/personas"
     touch "$SPECTRA_HOME/skills-prev/$skill/SKILL.md"
   done
@@ -72,7 +72,7 @@ teardown() { _common_teardown; }
 
   mkdir -p "$SPECTRA_HOME/skills-prev/shared"
   touch "$SPECTRA_HOME/skills-prev/shared/orchestration.md"
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     mkdir -p "$SPECTRA_HOME/skills-prev/$skill/personas"
     touch "$SPECTRA_HOME/skills-prev/$skill/SKILL.md"
   done
@@ -95,7 +95,7 @@ teardown() { _common_teardown; }
 
   mkdir -p "$SPECTRA_HOME/skills-prev/shared"
   touch "$SPECTRA_HOME/skills-prev/shared/orchestration.md"
-  for skill in deep-design decision-board code-review; do
+  for skill in deep-design decision-board peer-review; do
     mkdir -p "$SPECTRA_HOME/skills-prev/$skill/personas"
     touch "$SPECTRA_HOME/skills-prev/$skill/SKILL.md"
   done
