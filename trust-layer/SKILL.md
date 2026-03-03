@@ -80,7 +80,9 @@ digraph trust-layer {
     "Confirmation gate" -> "User confirms?";
     "User confirms?" -> "Phase 2: Team setup (TeamCreate, session dir, session_start event)" [label="yes"];
     "User confirms?" -> "Cleanup: TeamDelete, manifest, delete sentinel" [label="cancel"];
-    "Phase 2: Team setup (TeamCreate, session dir, session_start event)" -> "Phase 3: Spawn personas in parallel, poll for files";
+    "Phase 2: Team setup (TeamCreate, session dir, session_start event)" -> "Phase 2.5: Scout — context-brief.json";
+    "Phase 2.5: Scout — context-brief.json" [shape=box];
+    "Phase 2.5: Scout — context-brief.json" -> "Phase 3: Spawn personas in parallel, poll for files";
     "Phase 3: Spawn personas in parallel, poll for files" -> "Validate output, write finding events";
     "Validate output, write finding events" -> "Post-phase directory audit";
     "Post-phase directory audit" -> "Standard or Deep tier?";
@@ -298,6 +300,42 @@ For each selected persona, spawn using the Agent tool with:
       {agent count} agents spawning ({tier} tier)
 ```
 
+## Phase 2.5: Scout — Context Gathering
+
+Spawn the Scout agent immediately after creating the session directory structure. The Scout
+gathers context about the artifact being verified so personas do not redundantly re-gather it.
+
+**Scout agent configuration:** Follow `~/.claude/skills/shared/orchestration.md > Scout Agent`
+for the full agent config, polling pattern, and prompt template.
+
+**Scout gather instructions for trust-layer:**
+
+- Read `CLAUDE.md` in the project root (conventions, known packages, tech stack). If absent, note that.
+- Identify the input mode: code snippet, diff, file path, or session artifact
+- If a file path was provided, read its contents — note the language, any import/require statements,
+  and package references
+- If a session artifact path was provided, read its top-level structure (keys, schema shape)
+- List any package names detected in the artifact (name + version if visible); these will be used
+  by the package-validator persona for hallucination checking
+
+**`skill_context` schema for trust-layer:**
+
+```json
+{
+  "input_mode": "code|diff|file|session-artifact",
+  "artifact_summary": "Brief description of what is being verified",
+  "detected_packages": [
+    {"name": "express", "version": "4.18.2", "source": "package.json"}
+  ],
+  "artifact_file_count": 1
+}
+```
+
+**Output:** `{session_directory}/context-brief.json`
+
+Poll using Glob for `{session_directory}/context-brief.json` (60s timeout, ~10s cadence).
+After the file arrives, proceed to Phase 3.
+
 ## Phase 3: Opening Round
 
 The moderator drives this phase directly:
@@ -321,6 +359,12 @@ The moderator drives this phase directly:
 
 ```
 {persona file contents}
+
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your analysis.
+This file contains pre-gathered project conventions, stack, and artifact context.
+You may search for additional details if needed — the file covers the essentials.
 
 ## Your Task
 You are a member of a Trust Layer verification panel. Your job is to challenge the following
@@ -422,6 +466,12 @@ finding counts per Persistence Protocol. Log `checkpoint_written` event.
 
 ```
 {persona file contents}
+
+## Pre-Gathered Context
+
+Read `{session_directory}/context-brief.json` before starting your analysis.
+This file contains pre-gathered project conventions, stack, and artifact context.
+You may search for additional details if needed — the file covers the essentials.
 
 ## Discussion Context
 You are participating in round {n} of the Trust Layer verification panel.
@@ -551,7 +601,7 @@ Once verification is complete:
 8. **Post-synthesis directory audit**: Validate the session directory against the file-write
    allowlist:
    - Allowed files: `trust-events.jsonl`, `session.lock`, `trust-report.json`, `trust-report.md`,
-     `session-state.md`, `composition-request.json`
+     `session-state.md`, `composition-request.json`, `context-brief.json`
    - Allowed directories and contents: `trust-check/*.json`,
      `discussion/round-*/{agent-name}.json`
    - Any unexpected file triggers a `security_violation` event and user warning
@@ -669,6 +719,7 @@ Runtime session directory — Standard invocation path:
   session.lock
   session-state.md
   trust-events.jsonl
+  context-brief.json
   trust-check/
     package-validator.json
     intent-auditor.json
