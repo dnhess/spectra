@@ -9,7 +9,7 @@ Written by each persona agent to their output JSON file. Collected by the modera
     {
       "event_id": "uuid",
       "sequence_number": 7,
-      "schema_version": "1.0.0",
+      "schema_version": "1.1.0",
       "type": "finding",
       "timestamp": "ISO-8601",
       "session_id": "trust-layer-{topic}-{timestamp}",
@@ -28,7 +28,7 @@ Written by the moderator after all persona findings are collected and aggregated
     {
       "event_id": "uuid",
       "sequence_number": 12,
-      "schema_version": "1.0.0",
+      "schema_version": "1.1.0",
       "type": "trust_verdict",
       "timestamp": "ISO-8601",
       "session_id": "trust-layer-{topic}-{timestamp}",
