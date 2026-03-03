@@ -1517,6 +1517,7 @@ After the synthesis agent completes, validate the entire session directory again
 - `discussion/round-*/*.json`
 - `discussion/round-*/round-brief.json`
 - `final-positions/*.json`
+- `trust-check/*.json`
 
 Any file not matching the allowlist triggers a `security_violation` event and a user warning. See `~/.claude/skills/shared/security.md` for the audit protocol.
 
