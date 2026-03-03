@@ -903,7 +903,7 @@ After synthesis artifacts are written, run the shared verification protocol from
 
 Skip this step for Quick tier sessions.
 
-8. **Write `session_end` event** to `decision-events.jsonl` with final metrics (quality computed per formula in event-schemas.md, using metrics from the synthesis brief and synthesis agents' return summaries).
+7. **Write `session_end` event** to `decision-events.jsonl` with final metrics (quality computed per formula in event-schemas.md, using metrics from the synthesis brief and synthesis agents' return summaries).
 
    After computing quality, compute quality KPIs from the event log:
    - `completion_rate`: count `agent_complete` events with `status=completed` / total `agent_complete` events
@@ -915,7 +915,7 @@ Skip this step for Quick tier sessions.
 
    Include the `quality_kpis` object in the `session_end` event. Use `null` for any metric with a 0/0 denominator. Also include `consensus_strength`, `rounds_debated`, `concessions_count`, and `dissenting_agents_count` as top-level fields on the `session_end` event per the decision-board extensions schema.
 
-9. **Present to user** using the appropriate terminal state message:
+8. **Present to user** using the appropriate terminal state message:
 
 ### Terminal State UX Messages
 
