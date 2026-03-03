@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-03-03
+
+### Fixed
+
+- `install.sh`: trust-layer and coherence-monitor not linked or given session directories on fresh install
+- `install.sh`: missing `Bash(bash ~/.claude/skills/shared/tools/db-utils.sh *)` permission (present in CLI but absent from installer)
+- `release.yml`: tarball included stale `code-review/` path instead of `peer-review/`; trust-layer and coherence-monitor were missing from release artifact entirely
+
 ## [0.4.0] - 2026-03-03
 
 ### Added
