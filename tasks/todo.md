@@ -72,3 +72,41 @@
 - Verification: 365/365 repository tests, Markdown lint across 84 files, ShellCheck, runtime
   Python compilation, valid production JSON, and diff hygiene all pass. The intentionally
   truncated validation fixture remains excluded from production-JSON parsing by design.
+
+## Minimal Codex execution profile
+
+### Plan
+
+- [x] Require an explicit, dedicated `CODEX_HOME` for preview and execute.
+- [x] Run Codex with a private empty `HOME` while preserving only the dedicated authenticated profile.
+- [x] Validate the profile path and bind its non-secret configuration manifest into approval.
+- [x] Reject missing, symlinked, permissive, or changed execution profiles before worker launch.
+- [x] Add fake-Codex coverage for environment isolation, profile mutation, and compatibility failures.
+- [x] Update adapter capabilities, CLI help, packaging documentation, and runtime limitations.
+- [x] Run focused and full verification without launching a real Codex worker.
+
+### Guardrails
+
+- No real Codex worker or model call runs during this slice.
+- Authentication material is validated by type and permissions but never read, hashed, logged, or copied by the moderator.
+- The execution profile is explicit and approval-bound; the executor never falls back to the user's profile.
+- The private worker `HOME` contains no user skills, and executable plans cannot stage `.agents`.
+- Existing Claude workflows and inert Codex validation/render/dry-run operations remain unchanged.
+
+### Review
+
+- Preview and execute now require an explicit owner-only profile containing nonempty
+  `auth.json` and optional `config.toml`; other profile state is rejected. Configuration
+  is hash-bound and authentication-file identity is metadata-bound without reading the secret.
+- Codex version probes and workers receive private `HOME`, `CODEX_SQLITE_HOME`, `TMPDIR`,
+  and XDG roots. File-backed credentials are forced, repository `.agents`/`.codex` inputs
+  cannot be staged, and the profile is revalidated immediately before every worker spawn.
+- The shared capability remains provider-neutral through
+  `requires_explicit_execution_profile`; CLI forwarding accepts both split and
+  `--flag=value` forms. Documentation records the remaining system-skill and
+  credential-read isolation limitations.
+- Verification: 19/19 final fake-executor tests, 39/39 focused runtime tests, 373/373
+  repository tests, Markdown lint across 84 files, ShellCheck, production JSON parsing,
+  Python AST parsing, adapter validate/dry-run, and diff hygiene all pass.
+- No real Codex worker or model call ran. The next gate remains a separately approved
+  synthetic one-worker smoke, followed by operating-system read-isolation work.

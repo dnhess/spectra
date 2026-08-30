@@ -37,6 +37,8 @@ MAX_PROMPT_BYTES = 64 * 1024
 MAX_ARTIFACT_BYTES = 50 * 1024
 MAX_LOG_BYTES = 2 * 1024 * 1024
 MAX_CODEX_BINARY_BYTES = 256 * 1024 * 1024
+MAX_PROFILE_CONFIG_BYTES = 256 * 1024
+MAX_PROFILE_AUTH_BYTES = 256 * 1024
 MAX_DEADLINE_SECONDS = 300
 MODEL_ENV = {
     "economical": "SPECTRA_CODEX_MODEL_ECONOMICAL",
@@ -158,6 +160,93 @@ def canonical_directory(raw: str, label: str) -> Path:
     return resolved
 
 
+def secure_profile_file(path: Path, label: str, maximum: int | None = None) -> os.stat_result:
+    info = regular_file(path, label, maximum)
+    if info.st_uid != os.geteuid():
+        raise ExecutorError(f"{label} must be owned by the current user")
+    if stat.S_IMODE(info.st_mode) & 0o077:
+        raise ExecutorError(f"{label} must not grant group or other permissions")
+    return info
+
+
+def codex_home_info(raw: str, workspace: Path, session: Path) -> dict[str, Any]:
+    root = canonical_directory(raw, "--codex-home")
+    info = root.lstat()
+    if info.st_uid != os.geteuid():
+        raise ExecutorError("--codex-home must be owned by the current user")
+    if stat.S_IMODE(info.st_mode) & 0o077:
+        raise ExecutorError("--codex-home must not grant group or other permissions")
+    for label, other in (
+        ("Spectra root", SPECTRA_ROOT),
+        ("workspace root", workspace),
+        ("session root", session),
+    ):
+        if root == other or root in other.parents or other in root.parents:
+            raise ExecutorError(f"--codex-home must be disjoint from the {label}")
+
+    config_files: dict[str, dict[str, Any]] = {}
+    try:
+        children = sorted(root.iterdir(), key=lambda item: item.name)
+    except OSError as exc:
+        raise ExecutorError(f"cannot inspect --codex-home: {exc}") from None
+    for candidate in children:
+        if candidate.name not in {"auth.json", "config.toml"}:
+            if candidate.name in {"skills", "plugins"}:
+                raise ExecutorError(f"--codex-home must not contain {candidate.name}")
+            raise ExecutorError(f"--codex-home contains unexpected entry: {candidate.name}")
+        if candidate.name == "config.toml":
+            file_info = secure_profile_file(
+                candidate, "Codex profile configuration config.toml", MAX_PROFILE_CONFIG_BYTES
+            )
+            contents = read_bound_bytes(
+                candidate, MAX_PROFILE_CONFIG_BYTES, "Codex profile configuration config.toml"
+            )
+            size, digest = len(contents), sha256_bytes(contents)
+            if size != file_info.st_size:
+                raise ExecutorError("Codex profile configuration changed while hashing")
+            config_files[candidate.name] = {"size": size, "sha256": digest}
+
+    auth_path = root / "auth.json"
+    if not auth_path.exists() and not auth_path.is_symlink():
+        raise ExecutorError("--codex-home must contain owner-only auth.json")
+    auth_info = secure_profile_file(
+        auth_path, "Codex authentication material", MAX_PROFILE_AUTH_BYTES
+    )
+    if auth_info.st_size == 0:
+        raise ExecutorError("Codex authentication material must not be empty")
+    if not stat.S_IMODE(auth_info.st_mode) & stat.S_IRUSR:
+        raise ExecutorError("Codex authentication material must be readable by its owner")
+    auth = {
+        "present": True,
+        "device": auth_info.st_dev,
+        "inode": auth_info.st_ino,
+        "mode": stat.S_IMODE(auth_info.st_mode),
+        "uid": auth_info.st_uid,
+        "size": auth_info.st_size,
+        "modified_ns": auth_info.st_mtime_ns,
+    }
+
+    return {
+        "path": str(root),
+        "root": {
+            "device": info.st_dev,
+            "inode": info.st_ino,
+            "mode": stat.S_IMODE(info.st_mode),
+            "uid": info.st_uid,
+        },
+        "configuration": config_files,
+        "authentication": auth,
+    }
+
+
+def require_unchanged_execution_profile(context: dict[str, Any]) -> None:
+    current = codex_home_info(
+        context["execution_profile"]["path"], context["workspace"], context["session"]
+    )
+    if current != context["execution_profile"]:
+        raise ExecutorError("Codex execution profile changed after approval")
+
+
 def confined(root: Path, relative: str, label: str) -> Path:
     pure = PurePosixPath(relative)
     if pure.is_absolute() or not pure.parts or any(part in ("", ".", "..") for part in pure.parts):
@@ -235,7 +324,7 @@ def validate_scope(plan: dict[str, Any]) -> None:
             raise ExecutorError(f"action {action['id']} output is outside its declared write paths")
 
 
-def executable_info(raw: str) -> dict[str, Any]:
+def executable_info(raw: str, execution_profile: dict[str, Any]) -> dict[str, Any]:
     requested = Path(raw)
     if not requested.is_absolute() or str(requested) != os.path.normpath(str(requested)):
         raise ExecutorError("--codex-bin must be a normalized absolute path")
@@ -246,17 +335,20 @@ def executable_info(raw: str) -> dict[str, Any]:
     info = regular_file(resolved, "Codex executable", MAX_CODEX_BINARY_BYTES)
     if not info.st_mode & stat.S_IXUSR or not os.access(resolved, os.X_OK):
         raise ExecutorError("Codex executable is not executable")
-    env = subprocess_environment()
     try:
-        completed = subprocess.run(
-            [str(resolved), "--version"],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=5,
-            check=False,
-            env=env,
-        )
+        with tempfile.TemporaryDirectory(prefix="spectra-codex-probe-") as temporary:
+            env = codex_environment(
+                Path(execution_profile["path"]), Path(temporary) / "environment"
+            )
+            completed = subprocess.run(
+                [str(resolved), "--version"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=5,
+                check=False,
+                env=env,
+            )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ExecutorError(f"Codex version check failed: {exc}") from None
     if completed.returncode != 0:
@@ -277,10 +369,29 @@ def executable_info(raw: str) -> dict[str, Any]:
 
 def subprocess_environment() -> dict[str, str]:
     allowed = (
-        "HOME", "PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "USER", "LOGNAME",
-        "SHELL", "CODEX_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR",
+        "PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "USER", "LOGNAME", "SHELL",
+        "SSL_CERT_FILE", "SSL_CERT_DIR",
     )
     return {key: os.environ[key] for key in allowed if key in os.environ}
+
+
+def codex_environment(codex_home: Path, private_root: Path) -> dict[str, str]:
+    private_root.mkdir(mode=0o700, parents=True, exist_ok=False)
+    locations = {
+        "HOME": private_root / "home",
+        "TMPDIR": private_root / "tmp",
+        "XDG_CONFIG_HOME": private_root / "xdg-config",
+        "XDG_CACHE_HOME": private_root / "xdg-cache",
+        "XDG_DATA_HOME": private_root / "xdg-data",
+        "XDG_STATE_HOME": private_root / "xdg-state",
+        "CODEX_SQLITE_HOME": private_root / "codex-sqlite",
+    }
+    for path in locations.values():
+        path.mkdir(mode=0o700)
+    env = subprocess_environment()
+    env.update({name: str(path) for name, path in locations.items()})
+    env["CODEX_HOME"] = str(codex_home)
+    return env
 
 
 def model_map(plan: dict[str, Any]) -> dict[str, str]:
@@ -381,6 +492,8 @@ def enumerate_declared(root: Path, relative: str) -> list[Entry]:
 
     def visit(path: Path, logical: PurePosixPath) -> None:
         nonlocal total_bytes, files
+        if any(part in {".agents", ".codex"} for part in logical.parts):
+            raise ExecutorError(f"declared inputs must not stage agent configuration: {logical}")
         try:
             info = path.lstat()
         except OSError as exc:
@@ -523,7 +636,8 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
         raise ExecutorError("--session-root directory name must equal plan.session_id")
     if workspace == session or workspace in session.parents or session in workspace.parents:
         raise ExecutorError("workspace and session roots must be disjoint")
-    binary = executable_info(args.codex_bin)
+    execution_profile = codex_home_info(args.codex_home, workspace, session)
+    binary = executable_info(args.codex_bin, execution_profile)
     mapping = model_map(plan)
     schema_info = regular_file(SCHEMA_PATH, "trusted output schema", 256 * 1024)
     schema_bytes = SCHEMA_PATH.read_bytes()
@@ -552,6 +666,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
             "session": str(session),
         },
         "codex": binary,
+        "execution_profile": execution_profile,
         "model_map": mapping,
         "limits": limits,
         "schema": {
@@ -565,6 +680,12 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
             "ignore_user_config": True,
             "ignore_rules": True,
             "disabled_features": list(DISABLED_CODEX_FEATURES),
+            "ambient_codex_home": False,
+            "private_home": True,
+            "private_codex_sqlite_home": True,
+            "private_tmpdir": True,
+            "private_xdg_roots": True,
+            "cli_auth_credentials_store": "file",
         },
         "declared_inputs": {
             action_id: [entry.as_dict() for entry in entries]
@@ -587,6 +708,15 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
         "deadline_seconds": plan["phase"]["join"]["deadline_seconds"],
         "roots": digest_document["roots"],
         "codex": binary,
+        "execution_profile": {
+            "codex_home": execution_profile["path"],
+            "configuration": execution_profile["configuration"],
+            "authentication_material_present": execution_profile["authentication"]["present"],
+            "private_home": True,
+            "private_codex_sqlite_home": True,
+            "private_tmpdir": True,
+            "private_xdg_roots": True,
+        },
         "model_map": mapping,
         "limits": limits,
         "schema": digest_document["schema"],
@@ -606,6 +736,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
         "session": session,
         "binary": Path(binary["resolved_path"]),
         "binary_sha256": binary["sha256"],
+        "execution_profile": execution_profile,
         "models": mapping,
         "inputs": inputs,
         "prompts": prompts,
@@ -852,6 +983,9 @@ class Run:
         self.total_output = 0
         self.policy_path = context["session"] / "budget-policy.json"
         self.schema_path = run_dir / "peer-review-opening.schema.json"
+        self.codex_env = codex_environment(
+            Path(context["execution_profile"]["path"]), run_dir / "private-environment"
+        )
         self.metrics_env = dict(os.environ)
         self.metrics_env["SPECTRA_SESSION_ROOT"] = str(context["session"].parent)
 
@@ -880,10 +1014,12 @@ class Run:
             ], timeout=remaining)
             if deadline_at - time.monotonic() <= 0:
                 raise PhaseTimeout("phase deadline elapsed before Codex spawn")
+            require_unchanged_execution_profile(self.context)
             stdout_handle = stdout_path.open("xb")
             stderr_handle = stderr_path.open("xb")
             arguments = [
                 str(self.context["binary"]), "exec",
+                "-c", 'cli_auth_credentials_store="file"',
                 "-C", str(stage),
                 "--skip-git-repo-check",
                 "--sandbox", "read-only",
@@ -906,7 +1042,7 @@ class Run:
                     stdin=asyncio.subprocess.PIPE,
                     stdout=stdout_handle,
                     stderr=stderr_handle,
-                    env=subprocess_environment(),
+                    env=self.codex_env,
                     start_new_session=True,
                     preexec_fn=child_limits,
                 )
@@ -1072,6 +1208,7 @@ async def execute_approved(context: dict[str, Any]) -> dict[str, Any]:
     current_controls = control_file_manifest()
     if current_controls != context["control_files"]:
         raise ExecutorError("trusted runtime or budget controls changed after approval")
+    require_unchanged_execution_profile(context)
     copy_bound_file(
         SCHEMA_PATH,
         run.schema_path,
@@ -1122,6 +1259,7 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--workspace-root", required=True)
         command.add_argument("--session-root", required=True)
         command.add_argument("--codex-bin", required=True)
+        command.add_argument("--codex-home", required=True)
         command.add_argument("--max-concurrency", type=int, choices=(1, 2), default=2)
         if name == "execute":
             command.add_argument("--approve", required=True)

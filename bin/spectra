@@ -1162,6 +1162,18 @@ runtime_adapter_path() {
   echo "$adapter_base/adapters/codex/codex-runtime.sh"
 }
 
+runtime_has_option() {
+  local option="$1"
+  shift
+  local argument
+  for argument in "$@"; do
+    case "$argument" in
+      "$option"|"$option"=*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
 cmd_runtime() {
   local runtime="${1:-}"
 
@@ -1203,16 +1215,25 @@ cmd_runtime() {
       fi
       ;;
     preview)
-      [[ "$#" -ge 8 ]] || {
-        log_error "Usage: spectra runtime $runtime preview <plan> --workspace-root <path> --session-root <path> --codex-bin <path> [--max-concurrency 1|2]"
+      if ! { [[ "$#" -ge 2 ]] &&
+        runtime_has_option --workspace-root "$@" &&
+        runtime_has_option --session-root "$@" &&
+        runtime_has_option --codex-bin "$@" &&
+        runtime_has_option --codex-home "$@"; }; then
+        log_error "Usage: spectra runtime $runtime preview <plan> --workspace-root <path> --session-root <path> --codex-bin <path> --codex-home <path> [--max-concurrency 1|2]"
         exit 1
-      }
+      fi
       ;;
     execute)
-      [[ "$#" -ge 10 ]] || {
-        log_error "Usage: spectra runtime $runtime execute <plan> --workspace-root <path> --session-root <path> --codex-bin <path> --approve <token> [--max-concurrency 1|2]"
+      if ! { [[ "$#" -ge 2 ]] &&
+        runtime_has_option --workspace-root "$@" &&
+        runtime_has_option --session-root "$@" &&
+        runtime_has_option --codex-bin "$@" &&
+        runtime_has_option --codex-home "$@" &&
+        runtime_has_option --approve "$@"; }; then
+        log_error "Usage: spectra runtime $runtime execute <plan> --workspace-root <path> --session-root <path> --codex-bin <path> --codex-home <path> --approve <token> [--max-concurrency 1|2]"
         exit 1
-      }
+      fi
       ;;
     *)
       log_error "Unknown $runtime runtime command: ${action:-missing}"

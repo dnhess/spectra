@@ -133,9 +133,9 @@ Additional infrastructure:
   opt-in Quick peer-review executor stages only declared inputs, requires a digest-bound approval,
   caps concurrency at two, validates structured artifacts, and serializes budget writes. Approved
   execution sends staged inputs to the configured Codex model service; orchestration and artifacts
-  stay local. The executable path remains experimental because the desktop runtime may add
-  unrelated installed-skill context to every worker; a dedicated minimal Codex profile is the
-  next cost-control gate. See
+  stay local. Workers now require a dedicated authenticated Codex profile and per-run isolated
+  homes. The executable path remains experimental until a synthetic live smoke confirms that the
+  desktop transport no longer adds unrelated user-skill context. See
   [`docs/runtime-adapters.md`](docs/runtime-adapters.md).
 
 ## Context Persistence

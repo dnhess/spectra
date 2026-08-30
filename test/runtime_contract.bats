@@ -22,6 +22,8 @@ teardown() { _common_teardown; }
   assert_output --partial '"runtime": "codex"'
   assert_output --partial '"execution_enabled": true'
   assert_output --partial '"max_parallelism": 2'
+  assert_output --partial '"requires_explicit_execution_profile": true'
+  assert_output --partial '"isolates_user_home": true'
   assert_output --partial '"supported_operations"'
 }
 

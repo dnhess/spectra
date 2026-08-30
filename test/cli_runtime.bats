@@ -82,17 +82,25 @@ SCRIPT
 
   run "$SPECTRA_CLI" runtime codex preview plans/review.json \
     --workspace-root "$TEST_TEMP/workspace" --session-root "$TEST_TEMP/session" \
-    --codex-bin "$TEST_TEMP/codex"
+    --codex-bin "$TEST_TEMP/codex" --codex-home "$TEST_TEMP/codex-home"
   assert_success
   assert_output --partial "preview plans/review.json"
   assert_output --partial "--codex-bin $TEST_TEMP/codex"
+  assert_output --partial "--codex-home $TEST_TEMP/codex-home"
+
+  run "$SPECTRA_CLI" runtime codex preview plans/review.json \
+    --workspace-root="$TEST_TEMP/workspace" --session-root="$TEST_TEMP/session" \
+    --codex-bin="$TEST_TEMP/codex" --codex-home="$TEST_TEMP/codex-home"
+  assert_success
+  assert_output --partial "--codex-home=$TEST_TEMP/codex-home"
 
   run "$SPECTRA_CLI" runtime codex execute plans/review.json \
     --workspace-root "$TEST_TEMP/workspace" --session-root "$TEST_TEMP/session" \
-    --codex-bin "$TEST_TEMP/codex" --approve sha256:approved
+    --codex-bin "$TEST_TEMP/codex" --codex-home "$TEST_TEMP/codex-home" --approve sha256:approved
   assert_success
   assert_output --partial "execute plans/review.json"
   assert_output --partial "--approve sha256:approved"
+  assert_output --partial "--codex-home $TEST_TEMP/codex-home"
 }
 
 @test "runtime resolves adapters from the dev repository" {
@@ -123,4 +131,16 @@ SCRIPT
   run "$SPECTRA_CLI" runtime codex doctor extra
   assert_failure
   assert_output --partial "Usage"
+
+  run "$SPECTRA_CLI" runtime codex preview plans/review.json \
+    --workspace-root "$TEST_TEMP/workspace" --session-root "$TEST_TEMP/session" \
+    --codex-bin "$TEST_TEMP/codex"
+  assert_failure
+  assert_output --partial "--codex-home"
+
+  run "$SPECTRA_CLI" runtime codex execute plans/review.json \
+    --workspace-root "$TEST_TEMP/workspace" --session-root "$TEST_TEMP/session" \
+    --codex-bin "$TEST_TEMP/codex" --approve sha256:approved
+  assert_failure
+  assert_output --partial "--codex-home"
 }

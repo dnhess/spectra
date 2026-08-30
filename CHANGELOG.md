@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Digest-bound execution previews, allowlisted input staging, at-most-two worker concurrency,
   read-only ephemeral Codex invocations, strict peer-review output validation, quorum handling,
   moderator-only artifact publication, and serialized budget accounting
+- Explicit owner-only Codex execution profiles with file-backed authentication, private worker
+  home/XDG/state roots, approval-bound configuration, and per-spawn profile revalidation
 - `spectra runtime` commands for listing and inspecting runtime adapters and validating,
   rendering, dry-running, previewing, or executing a plan
 - Enforced session budget policies for all five skills, including dry-run estimates,
@@ -33,8 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Project positioning now treats Claude Code as the current default adapter rather than the
   permanent orchestration boundary
-- Codex execution is documented as experimental until workers can use a dedicated minimal
-  runtime profile without unrelated installed-skill context overhead
+- Codex execution remains experimental pending a live smoke of the dedicated minimal runtime
+  profile and stronger operating-system read isolation
 - Shared orchestration now applies budget checks at existing phase barriers and routes cheaper
   models to routine work while reserving frontier models for high-value synthesis and arbitration
 - CI path checks now cover `peer-review`, `trust-layer`, and `coherence-monitor`

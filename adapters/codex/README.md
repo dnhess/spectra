@@ -12,7 +12,8 @@ adapters/codex/codex-runtime.sh dry-run shared/runtime/fixtures/peer-review-quic
 ## Approved execution
 
 Execution requires a fresh session directory whose final component equals the
-plan's `session_id`, an explicit working Codex executable, and an explicit model
+plan's `session_id`, an explicit working Codex executable, a dedicated authenticated
+`CODEX_HOME`, and an explicit model
 mapping for every model class used by the plan:
 
 ```bash
@@ -21,12 +22,14 @@ export SPECTRA_CODEX_MODEL_STANDARD='<codex-model-id>'
 adapters/codex/codex-runtime.sh preview PLAN \
   --workspace-root /absolute/project \
   --session-root /absolute/sessions/peer-review-quick-fixture \
-  --codex-bin /absolute/path/to/codex
+  --codex-bin /absolute/path/to/codex \
+  --codex-home /absolute/path/to/dedicated-codex-home
 
 adapters/codex/codex-runtime.sh execute PLAN \
   --workspace-root /absolute/project \
   --session-root /absolute/sessions/peer-review-quick-fixture \
   --codex-bin /absolute/path/to/codex \
+  --codex-home /absolute/path/to/dedicated-codex-home \
   --approve 'sha256:<token-from-preview>'
 ```
 
@@ -35,10 +38,24 @@ model mapping, schema, persona prompts, declared input manifest, and limits. It
 runs only `codex --version`; it does not invoke a model or transmit project data.
 `execute` recomputes that token and rejects any change before work begins.
 
-Workers receive private staged copies of only their declared workspace inputs.
+Workers receive private staged copies of only their declared workspace inputs and run
+with per-run private `HOME`, `CODEX_SQLITE_HOME`, `TMPDIR`, and XDG roots. User files
+discovered through the caller's home and XDG roots are not inherited. The explicit
+`CODEX_HOME` remains in place for authentication but is not copied into the worker home;
+the invocation forces file-backed credentials instead of falling back to the OS keyring.
 They run with Codex's read-only sandbox, ephemeral state, ignored user config and
 rules, and a strict output schema. The executor validates each result and is the
 sole writer of final artifacts and budget telemetry.
+
+The explicit Codex home must be an existing normalized directory owned by the current
+user with no group or other permissions. It must contain a nonempty, owner-readable
+`auth.json` and may contain one owner-only `config.toml`; every other entry is rejected.
+Configuration hashes and authentication-file identity are approval-bound and rechecked
+immediately before every worker spawn. The moderator never reads, hashes, copies, or logs
+authentication contents. The Codex process necessarily receives this profile, however,
+and the read-only Codex sandbox is not an OS-level rule preventing worker tools from
+reading `auth.json`; use a stronger OS/container boundary when credential confidentiality
+from worker subprocesses is required.
 
 ## Limits and privacy
 
@@ -56,11 +73,10 @@ sole writer of final artifacts and budget telemetry.
 - Staging controls which project files Spectra supplies in the worker directory;
   Codex's read-only sandbox prevents writes but is not an OS-level read allowlist.
   A same-user worker may still be able to read other host-readable paths.
-- The desktop Codex runtime can still load descriptions of skills installed in the
-  user's Codex home despite ignored user config and disabled skill-search/plugin
-  features. This can add a large fixed context cost per worker. Use this executor
-  experimentally until a separately authenticated minimal Codex home or an
-  equivalent App Server/SDK isolation boundary is available.
+- Fake-runtime verification proves the worker does not inherit the caller's
+  `$HOME/.agents/skills` or ambient `CODEX_HOME`. Bundled and administrator-installed
+  skills and system configuration are outside this profile boundary, and a live synthetic
+  smoke is still required before treating the executable path as cost-efficient.
 
 The executor requires Python 3.10+ and is currently Unix-only because it uses
 process groups and resource limits for timeout and log cleanup.
