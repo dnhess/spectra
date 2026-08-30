@@ -117,14 +117,21 @@ hash-verified configuration copy, keeping Codex-created package and scratch stat
 the approval source. The operational authentication link is removed immediately after all
 worker processes finish, including failure paths; it is not retained with session logs.
 
+Preview also runs the local `codex debug prompt-input` renderer in an empty disposable home
+and directory. The rendered model input may contain only Codex's read-only permission policy,
+the synthetic environment context, and Spectra's sentinel. Skill instructions or any other
+developer/user content reject the binary before approval. Execute repeats this attestation
+immediately before every provider spawn.
+
 Workers use per-run private `HOME`, `CODEX_SQLITE_HOME`, `TMPDIR`, and XDG roots;
 caller-home and XDG-discovered files are not inherited. This closes the known personal
-user-profile discovery paths in fake-runtime tests, but does not suppress system
-configuration, bundled or administrator-installed skills, or provide an OS filesystem
-read allowlist. Because the Codex process receives a hard link to the file credential in
-its operational `CODEX_HOME`, OS-level isolation is still required to prevent a hostile
-worker tool from reading it.
-Live end-to-end smoke validation therefore remains pending.
+user-profile discovery paths in fake-runtime tests, but does not itself suppress system
+configuration or bundled and administrator-installed skills. The live smoke's retained
+operational state and an offline prompt rendering proved the desktop runtime injected bundled
+skills and unrelated orchestration instructions; the compatibility probe now rejects it before
+provider execution. Because a compatible Codex process would still receive a hard link to the
+file credential in its operational `CODEX_HOME`, OS-level isolation remains required to prevent
+a hostile worker tool from reading it.
 
 Relevant upstream references: [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode),
 the [Codex environment variables](https://learn.chatgpt.com/docs/config-file/environment-variables),
@@ -147,10 +154,11 @@ local-process adapter would be required for fully offline inference.
 
 ## Next gate
 
-The dedicated-profile one-worker end-to-end smoke completed successfully: it produced a valid
-artifact, kept the source profile unchanged, removed its operational authentication link, and
-showed no visible unrelated skill or plugin markers. Codex still reported 10,754 tokens for the
-36-byte synthetic input, so the next gate is non-model attribution of that overhead, followed by
-operating-system read isolation tests. Discussion, synthesis, retries,
+The dedicated-profile one-worker smoke produced a valid artifact and kept credential/profile
+state bounded, but its 10,754-token report led to a decisive offline finding: the desktop Codex
+runtime adds bundled skills and unrelated orchestration instructions to the model-visible prompt.
+The next gate is a standalone or updated Codex runtime whose offline prompt attestation passes,
+followed by a separately approved one-worker smoke and operating-system read-isolation tests.
+Discussion, synthesis, retries,
 dependencies, nested workers, resume, and large fleets remain explicitly
 unsupported until this slice produces trustworthy evidence.

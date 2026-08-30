@@ -20,6 +20,24 @@ setup() {
   chmod 600 "$CODEX_PROFILE/auth.json" "$CODEX_PROFILE/config.toml"
   printf '%s\n' 'unrelated skill' > "$AMBIENT_HOME/.agents/skills/unrelated/SKILL.md"
   printf '%s\n' 'def example():' '    return 1' > "$WORKSPACE/src/example.py"
+  cat > "$FAKE_DIR/prompt-probe.sh" <<'FAKE'
+fake_prompt_probe() {
+  [[ "${1:-}" == "-C" ]] || return 0
+  shift 2
+  while [[ "${1:-}" == "--disable" ]]; do shift 2; done
+  [[ "${1:-}" == "debug" ]]
+  [[ "${2:-}" == "prompt-input" ]]
+  [[ "${3:-}" == "spectra-prompt-context-probe-v1" ]]
+  [[ $# -eq 3 ]]
+  printf 'prompt-context\n' >> "$(dirname "$0")/invocations.log"
+  if [[ -f "$(dirname "$0")/contaminated-context" ]]; then
+    printf '%s\n' '[{"type":"message","role":"developer","content":[{"type":"input_text","text":"<skills_instructions>unrelated skill</skills_instructions>"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"spectra-prompt-context-probe-v1"}]}]'
+  else
+    printf '%s\n' '[{"type":"message","role":"developer","content":[{"type":"input_text","text":"<permissions instructions>read-only</permissions instructions>"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>isolated</environment_context>"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"spectra-prompt-context-probe-v1"}]}]'
+  fi
+  exit 0
+}
+FAKE
   export HOME="$AMBIENT_HOME"
   export CODEX_HOME="$AMBIENT_HOME/.codex"
   export SPECTRA_CODEX_MODEL_STANDARD="fake-standard-model"
@@ -45,6 +63,8 @@ write_good_fake() {
   cat > "$FAKE_CODEX" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/prompt-probe.sh"
+fake_prompt_probe "$@"
 log="$(dirname "$0")/invocations.log"
 log_environment() {
   printf 'environment\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
@@ -95,6 +115,10 @@ if [[ -f "$(dirname "$0")/mutate-profile" && ! -f "$(dirname "$0")/profile-mutat
   mv "$(dirname "$0")/auth.json" "$source_profile/auth.json"
   : > "$(dirname "$0")/profile-mutated"
 fi
+if [[ -f "$(dirname "$0")/mutate-context" && ! -f "$(dirname "$0")/context-mutated" ]]; then
+  : > "$(dirname "$0")/contaminated-context"
+  : > "$(dirname "$0")/context-mutated"
+fi
 sleep 0.12
 printf '{"reviewer":"%s","findings":[]}\n' "$worker" > "$output"
 printf 'end %s\n' "$worker" >> "$log"
@@ -106,6 +130,8 @@ write_bad_fake() {
   cat > "$FAKE_CODEX" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/prompt-probe.sh"
+fake_prompt_probe "$@"
 if [[ "${1:-}" == "--version" ]]; then
   printf 'codex-cli 99.0.0-test\n'
   exit 0
@@ -134,6 +160,8 @@ write_exit_fake() {
   cat > "$FAKE_CODEX" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/prompt-probe.sh"
+fake_prompt_probe "$@"
 if [[ "${1:-}" == "--version" ]]; then printf 'codex-cli 99.0.0-test\n'; exit 0; fi
 sed -n '1,200p' >/dev/null
 printf 'private-provider-detail-must-stay-in-log\n' >&2
@@ -146,6 +174,8 @@ write_partial_fake() {
   cat > "$FAKE_CODEX" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/prompt-probe.sh"
+fake_prompt_probe "$@"
 if [[ "${1:-}" == "--version" ]]; then printf 'codex-cli 99.0.0-test\n'; exit 0; fi
 shift
 stage="" output=""
@@ -198,6 +228,8 @@ preview_token() {
   assert_output --partial '"project_content_transmitted": false'
   assert_output --partial '"sha256:'
   assert_output --partial '"src/example.py"'
+  assert_output --partial '"probe": "codex-debug-prompt-input-v1"'
+  assert_output --partial '"unexpected_context_present": false'
   refute_output --partial 'not-a-real-secret'
 
   run grep '^start ' "$FAKE_DIR/invocations.log"
@@ -306,6 +338,10 @@ print("OK")
 PY
   assert_success
   assert_output 'OK'
+
+  run grep -c '^prompt-context$' "$FAKE_DIR/invocations.log"
+  assert_success
+  assert_output '5'
 
   run grep -R --exclude=auth.json 'not-a-real-secret' "$FAKE_DIR/invocations.log" \
     "$SESSION/.codex-executor"
@@ -450,6 +486,22 @@ PY
   assert_output --partial '"unit": "provider_process_runs"'
   assert_output --partial '"budget_model_calls_is_proxy": true'
   assert_output --partial '"internal_model_turns_available": false'
+}
+
+@test "preview rejects model-visible skill context before provider execution" {
+  write_good_fake
+  : > "$FAKE_DIR/contaminated-context"
+
+  run python3 "$EXECUTOR" preview "$PLAN" \
+    --workspace-root "$WORKSPACE" \
+    --session-root "$SESSION" \
+    --codex-bin "$FAKE_CODEX" \
+    --codex-home "$CODEX_PROFILE"
+  [ "$status" -eq 2 ]
+  assert_output --partial 'prompt context includes bundled or installed skill instructions'
+  run grep '^start ' "$FAKE_DIR/invocations.log"
+  assert_failure
+  [[ ! -e "$SESSION/budget-metrics.json" ]]
 }
 
 @test "preview requires an explicit Codex home" {
@@ -617,6 +669,23 @@ PY
     --max-concurrency 1 --approve "$token"
   [ "$status" -eq 3 ]
   assert_output --partial 'Codex execution profile changed after approval'
+  run grep -c '^start ' "$FAKE_DIR/invocations.log"
+  assert_success
+  assert_output '1'
+}
+
+@test "prompt context is re-attested before every provider spawn" {
+  write_good_fake
+  local token
+  token="$(preview_token 1)"
+  : > "$FAKE_DIR/mutate-context"
+
+  run python3 "$EXECUTOR" execute "$PLAN" \
+    --workspace-root "$WORKSPACE" --session-root "$SESSION" \
+    --codex-bin "$FAKE_CODEX" --codex-home "$CODEX_PROFILE" \
+    --max-concurrency 1 --approve "$token"
+  [ "$status" -eq 3 ]
+  assert_output --partial 'prompt context includes bundled or installed skill instructions'
   run grep -c '^start ' "$FAKE_DIR/invocations.log"
   assert_success
   assert_output '1'

@@ -40,6 +40,8 @@ MAX_CODEX_BINARY_BYTES = 256 * 1024 * 1024
 MAX_PROFILE_CONFIG_BYTES = 256 * 1024
 MAX_PROFILE_AUTH_BYTES = 256 * 1024
 MAX_DEADLINE_SECONDS = 300
+MAX_PROMPT_CONTEXT_BYTES = 256 * 1024
+PROMPT_CONTEXT_SENTINEL = "spectra-prompt-context-probe-v1"
 MODEL_ENV = {
     "economical": "SPECTRA_CODEX_MODEL_ECONOMICAL",
     "standard": "SPECTRA_CODEX_MODEL_STANDARD",
@@ -396,6 +398,102 @@ def codex_environment(codex_home: Path, private_root: Path) -> dict[str, str]:
     return env
 
 
+def validate_prompt_context(value: Any) -> dict[str, Any]:
+    if not isinstance(value, list) or not value or len(value) > 32:
+        raise ExecutorError("Codex prompt-context probe returned an invalid message list")
+    permissions_contexts = 0
+    environment_contexts = 0
+    sentinels = 0
+    for message_index, message in enumerate(value):
+        if not isinstance(message, dict) or message.get("type") != "message":
+            raise ExecutorError(
+                f"Codex prompt context contains an unexpected item at index {message_index}"
+            )
+        role = message.get("role")
+        content = message.get("content")
+        if role not in {"developer", "user"} or not isinstance(content, list) or not content:
+            raise ExecutorError(
+                f"Codex prompt context contains an unexpected message at index {message_index}"
+            )
+        for content_index, item in enumerate(content):
+            if (
+                not isinstance(item, dict)
+                or item.get("type") != "input_text"
+                or not isinstance(item.get("text"), str)
+            ):
+                raise ExecutorError(
+                    "Codex prompt context contains unexpected message content at "
+                    f"index {message_index}.{content_index}"
+                )
+            text = item["text"]
+            if role == "developer":
+                if text.startswith("<skills_instructions>"):
+                    raise ExecutorError(
+                        "Codex prompt context includes bundled or installed skill instructions"
+                    )
+                if not (
+                    text.startswith("<permissions instructions>")
+                    and text.rstrip().endswith("</permissions instructions>")
+                ):
+                    raise ExecutorError(
+                        "Codex prompt context includes unexpected developer instructions"
+                    )
+                permissions_contexts += 1
+                continue
+            if text == PROMPT_CONTEXT_SENTINEL:
+                sentinels += 1
+            elif (
+                text.startswith("<environment_context>")
+                and text.rstrip().endswith("</environment_context>")
+            ):
+                environment_contexts += 1
+            else:
+                raise ExecutorError("Codex prompt context includes unexpected user content")
+    if sentinels != 1 or permissions_contexts > 1 or environment_contexts > 1:
+        raise ExecutorError("Codex prompt-context probe did not preserve the minimal input boundary")
+    return {
+        "probe": "codex-debug-prompt-input-v1",
+        "permissions_context_present": permissions_contexts == 1,
+        "environment_context_present": environment_contexts == 1,
+        "unexpected_context_present": False,
+    }
+
+
+def prompt_context_info(binary: Path, timeout: float = 5.0) -> dict[str, Any]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="spectra-codex-context-probe-") as temporary:
+            root = Path(temporary)
+            codex_home = root / "codex-home"
+            stage = root / "stage"
+            codex_home.mkdir(mode=0o700)
+            stage.mkdir(mode=0o700)
+            env = codex_environment(codex_home, root / "environment")
+            arguments = [str(binary), "-C", str(stage)]
+            for feature in DISABLED_CODEX_FEATURES:
+                arguments.extend(["--disable", feature])
+            arguments.extend(["debug", "prompt-input", PROMPT_CONTEXT_SENTINEL])
+            completed = subprocess.run(
+                arguments,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=max(0.01, min(timeout, 5.0)),
+                check=False,
+                env=env,
+            )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ExecutorError(f"Codex prompt-context compatibility probe failed: {exc}") from None
+    if completed.returncode != 0:
+        raise ExecutorError(
+            f"Codex prompt-context compatibility probe exited {completed.returncode}"
+        )
+    if len(completed.stdout) > MAX_PROMPT_CONTEXT_BYTES or len(completed.stderr) > MAX_PROMPT_CONTEXT_BYTES:
+        raise ExecutorError("Codex prompt-context compatibility probe exceeded its output limit")
+    return validate_prompt_context(
+        strict_json_bytes(completed.stdout, "Codex prompt-context compatibility probe")
+    )
+
+
 def model_map(plan: dict[str, Any]) -> dict[str, str]:
     needed = sorted({action["execution"]["model_class"] for action in plan["actions"]})
     result: dict[str, str] = {}
@@ -640,6 +738,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
         raise ExecutorError("workspace and session roots must be disjoint")
     execution_profile = codex_home_info(args.codex_home, workspace, session)
     binary = executable_info(args.codex_bin, execution_profile)
+    prompt_context = prompt_context_info(Path(binary["resolved_path"]))
     mapping = model_map(plan)
     schema_info = regular_file(SCHEMA_PATH, "trusted output schema", 256 * 1024)
     schema_bytes = SCHEMA_PATH.read_bytes()
@@ -668,6 +767,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
             "session": str(session),
         },
         "codex": binary,
+        "prompt_context_attestation": prompt_context,
         "execution_profile": execution_profile,
         "model_map": mapping,
         "limits": limits,
@@ -689,6 +789,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
             "private_xdg_roots": True,
             "private_operational_codex_home": True,
             "cli_auth_credentials_store": "file",
+            "prompt_context_probe": "codex-debug-prompt-input-v1",
         },
         "declared_inputs": {
             action_id: [entry.as_dict() for entry in entries]
@@ -711,6 +812,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
         "deadline_seconds": plan["phase"]["join"]["deadline_seconds"],
         "roots": digest_document["roots"],
         "codex": binary,
+        "prompt_context_attestation": prompt_context,
         "execution_profile": {
             "codex_home": execution_profile["path"],
             "configuration": execution_profile["configuration"],
@@ -740,6 +842,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
         "session": session,
         "binary": Path(binary["resolved_path"]),
         "binary_sha256": binary["sha256"],
+        "prompt_context_attestation": prompt_context,
         "execution_profile": execution_profile,
         "models": mapping,
         "inputs": inputs,
@@ -1065,6 +1168,13 @@ class Run:
             if deadline_at - time.monotonic() <= 0:
                 raise PhaseTimeout("phase deadline elapsed before Codex spawn")
             require_unchanged_execution_profile(self.context)
+            current_prompt_context = prompt_context_info(
+                self.context["binary"], timeout=max(0.01, deadline_at - time.monotonic())
+            )
+            if current_prompt_context != self.context["prompt_context_attestation"]:
+                raise ExecutorError("Codex model-visible prompt context changed after approval")
+            if deadline_at - time.monotonic() <= 0:
+                raise PhaseTimeout("phase deadline elapsed during prompt-context preflight")
             stdout_handle = stdout_path.open("xb")
             stderr_handle = stderr_path.open("xb")
             arguments = [

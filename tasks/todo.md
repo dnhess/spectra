@@ -151,11 +151,61 @@
 - The second explicitly approved provider process completed one worker in 3.989 seconds and
   published a valid artifact with no findings. Budget telemetry records one provider-process
   proxy call and 0.050781 KB of validated output.
-- The source profile remained minimal, the operational authentication link was removed, and the
-  worker logs contain no visible skill, plugin, `AGENTS.md`, or installed-skill markers. Codex
-  nevertheless reported 10,754 tokens used for the 36-byte synthetic input. The smoke therefore
-  validates the transport, artifact, and isolation plumbing, but does not establish cost-efficient
-  execution or review quality.
-- The smallest follow-up is non-model token-attribution work before any broader fan-out or another
-  live worker. Operating-system read isolation remains a separate prerequisite for stronger
-  credential confidentiality.
+- The source profile remained minimal and the operational authentication link was removed. The
+  short worker log did not name skills, plugins, or `AGENTS.md`, but retained operational state and
+  a later offline prompt rendering prove that bundled skills and unrelated desktop orchestration
+  instructions were model-visible. This is a concrete material source of the 10,754-token report;
+  the exact input/cached/output split was not retained.
+- No broader fan-out or additional live worker is appropriate with the desktop runtime.
+  Operating-system read isolation remains a separate prerequisite for stronger credential
+  confidentiality once a compatible runtime passes offline context attestation.
+
+## Codex usage telemetry attribution
+
+### Plan
+
+- [x] Inventory retained smoke events, logs, prompts, and persisted state without reading credentials.
+- [x] Compare the observed evidence with the official `codex exec --json` usage event contract.
+- [x] Trace the executor's stdout/stderr handling and current budget telemetry boundary.
+- [x] Add a fail-closed, fake-runtime-covered `debug prompt-input` compatibility probe.
+- [x] Re-run the compatibility probe immediately before every provider spawn.
+- [x] Verify focused tests, the complete suite when code changes, lint, and diff hygiene.
+- [x] Record what the 10,754-token figure does and does not prove, plus the next gate.
+
+### Guardrails
+
+- No live Codex worker or provider call.
+- Do not read, copy, print, or modify authentication contents.
+- Preserve retained smoke evidence and the pre-existing untracked Python cache.
+- Keep provider-neutral budget semantics; provider-specific usage stays explicitly identified.
+
+### Investigation result
+
+- The retained worker used human-readable output, so only the aggregate `tokens used 10,754`
+  survived. Official JSON mode would provide input, cached-input, output, and reasoning-output
+  counters, but finer telemetry would not remove the unwanted context.
+- The operational home contains 504 KiB of system skills created when the worker started. An
+  offline `codex debug prompt-input` with a fresh empty home and all available related feature
+  flags disabled proves that the model-visible request still includes the bundled skill catalog
+  and unrelated desktop orchestration instructions.
+- The root fix is therefore a pre-provider compatibility attestation, not post-provider token
+  accounting. A binary that cannot render a minimal prompt must be rejected before approval or
+  worker execution.
+
+### Review
+
+- Preview binds a non-secret attestation summary into approval, and execute recomputes it. Every
+  serialized pre-spawn section performs a fresh offline attestation before model-call telemetry is
+  incremented or the provider process starts.
+- Fake Codex coverage passes 23/23, including preview rejection and contamination introduced after
+  the first of multiple serialized workers. The complete logical repository suite passes 377/377;
+  two adapter tests initially blocked by the workspace sandbox passed when rerun with their intended
+  temporary-directory write access.
+- The installed desktop Codex binary fails the real offline preview probe with the expected bundled
+  skill-context error. Its temporary authentication hardlink was removed immediately, leaving the
+  original owner-only file with one link. No live worker or provider call ran.
+- Markdown lint across 84 files, ShellCheck, Python AST parsing, production JSON parsing, and diff
+  hygiene pass. The pre-existing untracked Python cache remains untouched.
+- A future executable gate requires a standalone or updated Codex binary whose offline model-input
+  rendering passes, followed by separately approved smoke validation. JSON usage capture remains a
+  useful later observability improvement, not a remedy for injected context.

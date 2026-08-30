@@ -35,8 +35,15 @@ adapters/codex/codex-runtime.sh execute PLAN \
 
 `preview` hashes the validated plan, canonical roots, Codex binary and version,
 model mapping, schema, persona prompts, declared input manifest, and limits. It
-runs only `codex --version`; it does not invoke a model or transmit project data.
+runs only local `codex --version` and `codex debug prompt-input` compatibility
+probes; neither invokes a model or transmits project data.
 `execute` recomputes that token and rejects any change before work begins.
+
+The prompt-context probe uses an empty disposable home, isolated current directory,
+disabled optional features, and a sentinel prompt. It accepts only Codex's read-only
+permission context, synthetic environment context, and the sentinel. Bundled or installed
+skill instructions, unexpected developer instructions, and unexpected user content fail
+preview. The same attestation runs immediately before every provider spawn.
 
 Workers receive private staged copies of only their declared workspace inputs and run
 with per-run private `HOME`, `CODEX_SQLITE_HOME`, `TMPDIR`, and XDG roots. User files
@@ -80,9 +87,10 @@ when credential confidentiality from worker subprocesses is required.
 - Fake-runtime verification proves the worker does not inherit the caller's
   `$HOME/.agents/skills` or ambient `CODEX_HOME`. Bundled and administrator-installed
   skills and system configuration are outside this profile boundary. One live synthetic worker
-  completed without visible unrelated skill or plugin markers, but Codex reported 10,754 tokens
-  for the 36-byte input. Treat the executable path as experimental until that overhead is
-  attributed; the smoke validates transport and artifacts, not cost efficiency or review quality.
+  completed without naming them in its short log, but Codex reported 10,754 tokens for the
+  36-byte input. Retained state and an offline prompt rendering then proved that the desktop
+  runtime included bundled skills and unrelated orchestration instructions in model-visible
+  context. The executor now rejects that runtime before approval or provider execution.
 
 The executor requires Python 3.10+ and is currently Unix-only because it uses
 process groups and resource limits for timeout and log cleanup.
