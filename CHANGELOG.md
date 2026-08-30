@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read-only ephemeral Codex invocations, strict peer-review output validation, quorum handling,
   moderator-only artifact publication, and serialized budget accounting
 - Explicit owner-only Codex execution profiles with file-backed authentication, private worker
-  home/XDG/state roots, approval-bound configuration, and per-spawn profile revalidation
+  home/XDG/state roots, disposable operational homes, approval-bound configuration, and
+  per-spawn source-profile revalidation
 - `spectra runtime` commands for listing and inspecting runtime adapters and validating,
   rendering, dry-running, previewing, or executing a plan
 - Enforced session budget policies for all five skills, including dry-run estimates,
@@ -48,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   budget-report helpers
 - `spectra budget` now resolves its report helper from the linked repository in development mode
 - Security allowlists now recognize moderator-owned budget policy, metrics, and summary artifacts
+- Codex binary probes and worker scratch state no longer mutate the approval source profile
+- Operational Codex authentication links are removed before persistent session results return
+- The Codex structured-output schema avoids unsupported regex lookarounds, and provider stderr
+  remains in private worker logs instead of being copied into public execution summaries
 
 ## [0.4.1] - 2026-03-03
 

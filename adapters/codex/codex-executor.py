@@ -337,8 +337,10 @@ def executable_info(raw: str, execution_profile: dict[str, Any]) -> dict[str, An
         raise ExecutorError("Codex executable is not executable")
     try:
         with tempfile.TemporaryDirectory(prefix="spectra-codex-probe-") as temporary:
+            operational_home = Path(temporary) / "codex-home"
+            materialize_codex_home(execution_profile, operational_home)
             env = codex_environment(
-                Path(execution_profile["path"]), Path(temporary) / "environment"
+                operational_home, Path(temporary) / "environment"
             )
             completed = subprocess.run(
                 [str(resolved), "--version"],
@@ -685,6 +687,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
             "private_codex_sqlite_home": True,
             "private_tmpdir": True,
             "private_xdg_roots": True,
+            "private_operational_codex_home": True,
             "cli_auth_credentials_store": "file",
         },
         "declared_inputs": {
@@ -716,6 +719,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
             "private_codex_sqlite_home": True,
             "private_tmpdir": True,
             "private_xdg_roots": True,
+            "private_operational_codex_home": True,
         },
         "model_map": mapping,
         "limits": limits,
@@ -789,6 +793,41 @@ def copy_bound_file(source: Path, target: Path, expected_hash: str, maximum: int
     copied = target.read_bytes()
     if len(copied) != size or sha256_bytes(copied) != expected_hash:
         raise ExecutorError(f"{label} changed while being copied")
+
+
+def materialize_codex_home(profile: dict[str, Any], destination: Path) -> None:
+    destination.mkdir(mode=0o700, parents=True, exist_ok=False)
+    source_root = Path(profile["path"])
+    source_auth = source_root / "auth.json"
+    target_auth = destination / "auth.json"
+    try:
+        os.link(source_auth, target_auth, follow_symlinks=False)
+    except OSError as exc:
+        raise ExecutorError(f"cannot bind authentication into private Codex home: {exc}") from None
+    auth_info = target_auth.lstat()
+    expected_auth = profile["authentication"]
+    actual_auth = {
+        "present": True,
+        "device": auth_info.st_dev,
+        "inode": auth_info.st_ino,
+        "mode": stat.S_IMODE(auth_info.st_mode),
+        "uid": auth_info.st_uid,
+        "size": auth_info.st_size,
+        "modified_ns": auth_info.st_mtime_ns,
+    }
+    if actual_auth != expected_auth:
+        raise ExecutorError("Codex authentication changed while binding private home")
+
+    configuration = profile["configuration"]
+    if "config.toml" in configuration:
+        copy_bound_file(
+            source_root / "config.toml",
+            destination / "config.toml",
+            configuration["config.toml"]["sha256"],
+            MAX_PROFILE_CONFIG_BYTES,
+            "Codex profile configuration",
+        )
+        (destination / "config.toml").chmod(0o600)
 
 
 def worker_prompt(action: dict[str, Any], stage_entries: list[Entry], persona: str) -> bytes:
@@ -983,11 +1022,22 @@ class Run:
         self.total_output = 0
         self.policy_path = context["session"] / "budget-policy.json"
         self.schema_path = run_dir / "peer-review-opening.schema.json"
+        operational_home = run_dir / "codex-home"
+        materialize_codex_home(context["execution_profile"], operational_home)
         self.codex_env = codex_environment(
-            Path(context["execution_profile"]["path"]), run_dir / "private-environment"
+            operational_home, run_dir / "private-environment"
         )
         self.metrics_env = dict(os.environ)
         self.metrics_env["SPECTRA_SESSION_ROOT"] = str(context["session"].parent)
+
+    def remove_authentication_link(self) -> None:
+        auth_path = self.run_dir / "codex-home" / "auth.json"
+        try:
+            auth_path.unlink()
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise ExecutorError(f"cannot remove private Codex authentication link: {exc}") from None
 
     async def initialize_budget(self) -> None:
         atomic_json_write(self.policy_path, self.context["budget_policy"])
@@ -1101,10 +1151,13 @@ class Run:
                     await terminate_process(process)
                     return WorkerResult(action_id, worker_id, "timed-out", error="phase deadline elapsed")
                 if process.returncode != 0:
-                    detail = ""
-                    if stderr_path.exists():
-                        detail = stderr_path.read_bytes()[:2048].decode("utf-8", "replace").strip()
-                    return WorkerResult(action_id, worker_id, "failed", error=f"Codex exited {process.returncode}: {detail}")
+                    detail = f"; see private log {stderr_path}" if stderr_path.exists() else ""
+                    return WorkerResult(
+                        action_id,
+                        worker_id,
+                        "failed",
+                        error=f"Codex exited {process.returncode}{detail}",
+                    )
                 info = regular_file(output, "Codex artifact", MAX_ARTIFACT_BYTES)
                 raw = output.read_bytes()
                 if info.st_size != len(raw):
@@ -1200,7 +1253,6 @@ async def execute_approved(context: dict[str, Any]) -> dict[str, Any]:
     run_dir.mkdir(mode=0o700, exist_ok=False)
     for child in ("raw", "logs", "stages"):
         (run_dir / child).mkdir(mode=0o700)
-    run = Run(context, run_dir, targets)
     started = time.monotonic()
     binary_size, binary_hash = hash_file(context["binary"], MAX_CODEX_BINARY_BYTES)
     if binary_size <= 0 or binary_hash != context["binary_sha256"]:
@@ -1209,15 +1261,19 @@ async def execute_approved(context: dict[str, Any]) -> dict[str, Any]:
     if current_controls != context["control_files"]:
         raise ExecutorError("trusted runtime or budget controls changed after approval")
     require_unchanged_execution_profile(context)
-    copy_bound_file(
-        SCHEMA_PATH,
-        run.schema_path,
-        context["schema_sha256"],
-        256 * 1024,
-        "trusted output schema",
-    )
-    await run.initialize_budget()
-    results = await run.execute()
+    run = Run(context, run_dir, targets)
+    try:
+        copy_bound_file(
+            SCHEMA_PATH,
+            run.schema_path,
+            context["schema_sha256"],
+            256 * 1024,
+            "trusted output schema",
+        )
+        await run.initialize_budget()
+        results = await run.execute()
+    finally:
+        run.remove_authentication_link()
     elapsed = time.monotonic() - started
     output_kb = run.total_output / 1024.0
     await run_tool([

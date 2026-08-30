@@ -40,9 +40,13 @@ runs only `codex --version`; it does not invoke a model or transmit project data
 
 Workers receive private staged copies of only their declared workspace inputs and run
 with per-run private `HOME`, `CODEX_SQLITE_HOME`, `TMPDIR`, and XDG roots. User files
-discovered through the caller's home and XDG roots are not inherited. The explicit
-`CODEX_HOME` remains in place for authentication but is not copied into the worker home;
-the invocation forces file-backed credentials instead of falling back to the OS keyring.
+discovered through the caller's home and XDG roots are not inherited. The approved source
+profile is never passed directly to Codex. Instead, each probe or run gets a private
+operational `CODEX_HOME`: authentication is hard-linked without reading or copying its
+contents, approved configuration is copied by hash, and Codex-created scratch state remains
+inside the disposable run directory. The authentication link is removed as soon as worker
+execution ends, including failure paths. The invocation forces file-backed credentials
+instead of falling back to the OS keyring.
 They run with Codex's read-only sandbox, ephemeral state, ignored user config and
 rules, and a strict output schema. The executor validates each result and is the
 sole writer of final artifacts and budget telemetry.
@@ -52,10 +56,10 @@ user with no group or other permissions. It must contain a nonempty, owner-reada
 `auth.json` and may contain one owner-only `config.toml`; every other entry is rejected.
 Configuration hashes and authentication-file identity are approval-bound and rechecked
 immediately before every worker spawn. The moderator never reads, hashes, copies, or logs
-authentication contents. The Codex process necessarily receives this profile, however,
-and the read-only Codex sandbox is not an OS-level rule preventing worker tools from
-reading `auth.json`; use a stronger OS/container boundary when credential confidentiality
-from worker subprocesses is required.
+authentication contents. The Codex process necessarily receives the hard-linked credential
+in its private operational home, however, and the read-only Codex sandbox is not an OS-level
+rule preventing worker tools from reading `auth.json`; use a stronger OS/container boundary
+when credential confidentiality from worker subprocesses is required.
 
 ## Limits and privacy
 

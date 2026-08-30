@@ -27,6 +27,20 @@ setup() {
 
 teardown() { _common_teardown; }
 
+@test "provider output schema uses portable path validation" {
+  run python3 - "$PROJECT_ROOT/shared/schemas/peer-review-opening.schema.json" <<'PY'
+import json, re, sys
+schema = json.load(open(sys.argv[1], encoding="utf-8"))
+pattern = schema["properties"]["findings"]["items"]["properties"]["file_path"]["pattern"]
+assert "(?" not in pattern
+assert re.fullmatch(pattern, "src/example.py")
+assert re.fullmatch(pattern, "src/.hidden.py")
+assert not re.fullmatch(pattern, "src/../secret")
+assert not re.fullmatch(pattern, "/etc/passwd")
+PY
+  assert_success
+}
+
 write_good_fake() {
   cat > "$FAKE_CODEX" <<'FAKE'
 #!/usr/bin/env bash
@@ -43,6 +57,7 @@ log_environment() {
     [[ -d "$private_dir" ]]
     [[ -z "$(find "$private_dir" -mindepth 1 -print -quit)" ]]
   done
+  mkdir -p "$CODEX_HOME/tmp/arg0"
 }
 if [[ "${1:-}" == "--version" ]]; then
   log_environment version
@@ -74,9 +89,10 @@ worker="$(basename "$stage")"
 log_environment exec
 printf 'start %s\n' "$worker" >> "$log"
 if [[ -f "$(dirname "$0")/mutate-profile" && ! -f "$(dirname "$0")/profile-mutated" ]]; then
+  source_profile="$(dirname "$(dirname "$0")")/codex-home"
   printf '%s\n' '{"mutated":"not-a-real-secret"}' > "$(dirname "$0")/auth.json"
   chmod 600 "$(dirname "$0")/auth.json"
-  mv "$(dirname "$0")/auth.json" "$CODEX_HOME/auth.json"
+  mv "$(dirname "$0")/auth.json" "$source_profile/auth.json"
   : > "$(dirname "$0")/profile-mutated"
 fi
 sleep 0.12
@@ -110,6 +126,18 @@ while [[ $# -gt 0 ]]; do
 done
 sed -n '1,200p' >/dev/null
 printf '{"reviewer":"wrong-reviewer","findings":[]}\n' > "$output"
+FAKE
+  chmod +x "$FAKE_CODEX"
+}
+
+write_exit_fake() {
+  cat > "$FAKE_CODEX" <<'FAKE'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--version" ]]; then printf 'codex-cli 99.0.0-test\n'; exit 0; fi
+sed -n '1,200p' >/dev/null
+printf 'private-provider-detail-must-stay-in-log\n' >&2
+exit 23
 FAKE
   chmod +x "$FAKE_CODEX"
 }
@@ -259,7 +287,7 @@ assert metrics["model_calls"] == 3
 assert environments
 for fields in environments:
     _, phase, home, codex_home, sqlite_home, tmpdir, xdg_config, xdg_cache, xdg_data_state = fields
-    assert codex_home == __import__("os").path.realpath(sys.argv[3])
+    assert codex_home != __import__("os").path.realpath(sys.argv[3])
     assert home != sys.argv[4]
     assert sqlite_home != codex_home
     assert home != codex_home
@@ -269,7 +297,9 @@ for fields in environments:
     if phase == "exec":
         prefix = __import__("os").path.realpath(sys.argv[5]) + "/.codex-executor/"
         assert home.startswith(prefix)
+        assert codex_home.startswith(prefix)
         import stat
+        assert stat.S_IMODE(__import__("os").stat(codex_home).st_mode) == 0o700
         for location in (home, sqlite_home, tmpdir, xdg_config, xdg_cache, xdg_data, xdg_state):
             assert stat.S_IMODE(__import__("os").stat(location).st_mode) == 0o700
 print("OK")
@@ -277,9 +307,11 @@ PY
   assert_success
   assert_output 'OK'
 
-  run grep -R 'not-a-real-secret' "$FAKE_DIR/invocations.log" \
+  run grep -R --exclude=auth.json 'not-a-real-secret' "$FAKE_DIR/invocations.log" \
     "$SESSION/.codex-executor"
   assert_failure
+  [[ ! -e "$CODEX_PROFILE/tmp" ]]
+  [[ -z "$(find "$SESSION/.codex-executor" -path '*/codex-home/auth.json' -print -quit)" ]]
 }
 
 @test "an invalid reviewer artifact cannot reach the final artifact directory" {
@@ -299,6 +331,26 @@ PY
   [[ ! -e "$SESSION/opening/design-critic.json" ]]
   [[ ! -e "$SESSION/opening/reliability-engineer.json" ]]
   [[ ! -e "$SESSION/opening/security-auditor.json" ]]
+}
+
+@test "provider failures keep stderr details in the private worker log" {
+  write_exit_fake
+  local token
+  token="$(preview_token 1)"
+
+  run python3 "$EXECUTOR" execute "$PLAN" \
+    --workspace-root "$WORKSPACE" \
+    --session-root "$SESSION" \
+    --codex-bin "$FAKE_CODEX" \
+    --codex-home "$CODEX_PROFILE" \
+    --max-concurrency 1 \
+    --approve "$token"
+  [ "$status" -eq 3 ]
+  assert_output --partial 'Codex exited 23; see private log'
+  refute_output --partial 'private-provider-detail-must-stay-in-log'
+  run grep -R 'private-provider-detail-must-stay-in-log' "$SESSION/.codex-executor"
+  assert_success
+  [[ -z "$(find "$SESSION/.codex-executor" -path '*/codex-home/auth.json' -print -quit)" ]]
 }
 
 @test "continue-if-quorum accepts two valid artifacts and rejects the invalid peer" {

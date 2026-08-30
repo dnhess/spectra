@@ -111,13 +111,19 @@ and optional `config.toml`. Configuration is hashed into approval; authenticatio
 identity is bound without the moderator reading, hashing, copying, or logging its contents.
 The profile is rechecked immediately before each worker spawn, and file-backed credential
 storage is forced so execution cannot fall back to an ambient OS-keyring credential.
+The validated source profile is not passed directly to Codex. Each version probe and run
+receives a disposable operational `CODEX_HOME` with hard-linked authentication and a
+hash-verified configuration copy, keeping Codex-created package and scratch state outside
+the approval source. The operational authentication link is removed immediately after all
+worker processes finish, including failure paths; it is not retained with session logs.
 
 Workers use per-run private `HOME`, `CODEX_SQLITE_HOME`, `TMPDIR`, and XDG roots;
 caller-home and XDG-discovered files are not inherited. This closes the known personal
 user-profile discovery paths in fake-runtime tests, but does not suppress system
 configuration, bundled or administrator-installed skills, or provide an OS filesystem
-read allowlist. Because the Codex process receives `CODEX_HOME`, OS-level isolation is
-still required to prevent a hostile worker tool from reading its file credentials.
+read allowlist. Because the Codex process receives a hard link to the file credential in
+its operational `CODEX_HOME`, OS-level isolation is still required to prevent a hostile
+worker tool from reading it.
 Live end-to-end smoke validation therefore remains pending.
 
 Relevant upstream references: [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode),

@@ -110,3 +110,41 @@
   Python AST parsing, adapter validate/dry-run, and diff hygiene all pass.
 - No real Codex worker or model call ran. The next gate remains a separately approved
   synthetic one-worker smoke, followed by operating-system read-isolation work.
+
+## Dedicated-profile synthetic Codex smoke
+
+### Plan
+
+- [x] Confirm a working Codex binary and validate the one-action synthetic fixture locally.
+- [x] Create a disposable owner-only profile without reading or copying authentication contents.
+- [x] Materialize mutable probe/worker state in a private operational home, leaving the approval source immutable.
+- [x] Create a fresh synthetic workspace and matching session root outside the repository.
+- [x] Preview the exact one-worker invocation and inspect its approval boundary.
+- [x] Execute exactly one approved worker with the cost-sensitive model mapping.
+- [ ] Verify the artifact, budget telemetry, profile isolation, and absence of unrelated skill context.
+- [x] Record the result and smallest follow-up; do not broaden the executable workflow.
+
+### Guardrails
+
+- One synthetic source file, one reviewer, one provider process, and no retries.
+- No repository source is staged or transmitted.
+- The dedicated profile contains only `auth.json`; its contents are never printed or copied.
+- Stop before execution if preview differs from the expected one-action, concurrency-one boundary.
+- Preserve the repository's dirty state and the existing untracked Python cache.
+
+### Review
+
+- First preview found that the desktop Codex binary creates `CODEX_HOME/tmp/arg0`
+  package metadata even for `--version`. The subsequent execute failed closed before
+  worker launch because the approval source profile had changed. No model call occurred.
+- Private operational homes now contain probe/worker scratch state while the validated source
+  profile remains unchanged; 21/21 fake-executor tests cover this boundary.
+- The one authorized worker reached the provider but failed with `invalid_json_schema` before
+  producing an artifact because the output schema used an unsupported regex lookaround.
+  Budget telemetry correctly records one provider-process proxy call and zero output.
+- The schema now uses a portable, traversal-rejecting path expression, and provider error details
+  stay in private logs. A second live provider process requires a fresh explicit approval.
+- Operational authentication links are removed on success and failure; the link retained by the
+  failed smoke was verified against the source inode and removed without touching the original.
+- Verification after the compatibility fixes: 21/21 fake-executor tests, 375/375 repository
+  tests, Markdown lint across 84 files, ShellCheck, JSON/Python parsing, and diff hygiene pass.
