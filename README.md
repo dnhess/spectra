@@ -134,8 +134,9 @@ Additional infrastructure:
   caps concurrency at two, validates structured artifacts, and serializes budget writes. Approved
   execution sends staged inputs to the configured Codex model service; orchestration and artifacts
   stay local. Workers now require a dedicated authenticated Codex profile and per-run isolated
-  homes. The executable path remains experimental until a synthetic live smoke confirms that the
-  desktop transport no longer adds unrelated user-skill context. See
+  homes. A one-worker synthetic smoke completed without visible unrelated user-skill context, but
+  its 10,754 reported tokens remain unexplained; the executable path therefore stays experimental
+  pending token attribution and stronger operating-system read isolation. See
   [`docs/runtime-adapters.md`](docs/runtime-adapters.md).
 
 ## Context Persistence

@@ -121,7 +121,7 @@
 - [x] Create a fresh synthetic workspace and matching session root outside the repository.
 - [x] Preview the exact one-worker invocation and inspect its approval boundary.
 - [x] Execute exactly one approved worker with the cost-sensitive model mapping.
-- [ ] Verify the artifact, budget telemetry, profile isolation, and absence of unrelated skill context.
+- [x] Verify the artifact, budget telemetry, profile isolation, and absence of unrelated skill context.
 - [x] Record the result and smallest follow-up; do not broaden the executable workflow.
 
 ### Guardrails
@@ -148,3 +148,14 @@
   failed smoke was verified against the source inode and removed without touching the original.
 - Verification after the compatibility fixes: 21/21 fake-executor tests, 375/375 repository
   tests, Markdown lint across 84 files, ShellCheck, JSON/Python parsing, and diff hygiene pass.
+- The second explicitly approved provider process completed one worker in 3.989 seconds and
+  published a valid artifact with no findings. Budget telemetry records one provider-process
+  proxy call and 0.050781 KB of validated output.
+- The source profile remained minimal, the operational authentication link was removed, and the
+  worker logs contain no visible skill, plugin, `AGENTS.md`, or installed-skill markers. Codex
+  nevertheless reported 10,754 tokens used for the 36-byte synthetic input. The smoke therefore
+  validates the transport, artifact, and isolation plumbing, but does not establish cost-efficient
+  execution or review quality.
+- The smallest follow-up is non-model token-attribution work before any broader fan-out or another
+  live worker. Operating-system read isolation remains a separate prerequisite for stronger
+  credential confidentiality.

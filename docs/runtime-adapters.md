@@ -147,8 +147,10 @@ local-process adapter would be required for fully offline inference.
 
 ## Next gate
 
-The next gate is a separately approved synthetic one-worker end-to-end smoke using
-the dedicated profile, followed by operating-system read isolation tests. Discussion,
-synthesis, retries,
+The dedicated-profile one-worker end-to-end smoke completed successfully: it produced a valid
+artifact, kept the source profile unchanged, removed its operational authentication link, and
+showed no visible unrelated skill or plugin markers. Codex still reported 10,754 tokens for the
+36-byte synthetic input, so the next gate is non-model attribution of that overhead, followed by
+operating-system read isolation tests. Discussion, synthesis, retries,
 dependencies, nested workers, resume, and large fleets remain explicitly
 unsupported until this slice produces trustworthy evidence.

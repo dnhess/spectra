@@ -79,8 +79,10 @@ when credential confidentiality from worker subprocesses is required.
   A same-user worker may still be able to read other host-readable paths.
 - Fake-runtime verification proves the worker does not inherit the caller's
   `$HOME/.agents/skills` or ambient `CODEX_HOME`. Bundled and administrator-installed
-  skills and system configuration are outside this profile boundary, and a live synthetic
-  smoke is still required before treating the executable path as cost-efficient.
+  skills and system configuration are outside this profile boundary. One live synthetic worker
+  completed without visible unrelated skill or plugin markers, but Codex reported 10,754 tokens
+  for the 36-byte input. Treat the executable path as experimental until that overhead is
+  attributed; the smoke validates transport and artifacts, not cost efficiency or review quality.
 
 The executor requires Python 3.10+ and is currently Unix-only because it uses
 process groups and resource limits for timeout and log cleanup.
