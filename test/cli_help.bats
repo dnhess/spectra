@@ -23,6 +23,8 @@ teardown() {
   assert_output --partial "unlink"
   assert_output --partial "status"
   assert_output --partial "doctor"
+  assert_output --partial "budget"
+  assert_output --partial "runtime"
   assert_output --partial "backup"
   assert_output --partial "version"
   assert_output --partial "help"

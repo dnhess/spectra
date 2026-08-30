@@ -18,11 +18,14 @@ If you're reading this after context compression, check for an active session:
 
 After recovering or during any normal phase transition:
 
-1. Count completed rounds from event log (`bash ~/.claude/skills/shared/tools/jsonl-utils.sh count-type {event_log} phase_transition`)
-2. Measure cumulative output: sum file sizes of all agent output JSON files read during the session
-3. Compare against tier thresholds (see `~/.claude/skills/shared/orchestration.md` > Context Budget Monitoring)
-4. Emit `context_budget_status` event with current metrics and active threshold level
-5. If CRITICAL or above after compaction: execute emergency shutdown protocol (see `~/.claude/skills/shared/orchestration.md` > Emergency Shutdown Protocol)
+1. Initialize `budget-metrics.json` once with `budget-metrics.sh init`, then use `record` after every actual spawn, model call, completed round, and checkpoint; finalization increments must also increment total model calls
+2. Count completed rounds from event log (`bash ~/.claude/skills/shared/tools/jsonl-utils.sh count-type {event_log} phase_transition`)
+3. Measure cumulative output: sum file sizes of all agent output JSON files read during the session
+4. Read `budget-policy.json` if present and compute effective limits as `min(static skill cap, policy cap)`
+5. Compare against the shared budget contract using `budget-policy.sh evaluate` or `budget-policy.sh check` at the next barrier (see `~/.claude/skills/shared/orchestration.md`)
+6. Emit `context_budget_status` with current metrics, remaining budget snapshot, and any active controls
+7. If the policy is missing or corrupt, fall back to legacy tier behavior and log only
+8. If CRITICAL or above after compaction: execute emergency shutdown protocol (see `~/.claude/skills/shared/orchestration.md` > Emergency Shutdown Protocol)
 
 If no active session exists, start fresh.
 
@@ -33,6 +36,10 @@ Orchestrates a team of expert reviewer agents who conduct a structured, multi-pe
 A reconnaissance phase (scout + research) gathers codebase context and current best practices before reviewers begin. This is unique to peer-review — other Spectra skills do not have a pre-review intelligence-gathering phase.
 
 Reviews operate in one of three cost tiers (Quick, Standard, Deep) auto-selected based on target size, with user override.
+
+At the confirmation gate, show the preflight budget defaults and dry-run estimate from
+`budget-policy.json`. This skill's tier tables remain hard ceilings; the runtime limit is the minimum
+of those ceilings and the shared policy caps.
 
 You (the main Claude instance) act as the **moderator** throughout. You drive every phase directly — there is no coordinator agent.
 
@@ -201,6 +208,8 @@ digraph peer_review {
   no remaining challengers
 - Lazy specialist activation in Deep tier — start with core reviewers, activate
   specialists only if opening findings flag issues in their domain
+- Budget-policy enforcement at existing barriers only — before research follow-ons, new spawns, another round, and composition; never kill in-flight agents
+- Model routing follows the shared `model_policy`, with frontier restricted to high-value synthesis or arbitration and approval when configured
 
 ### Tier Auto-Selection
 
@@ -1538,6 +1547,9 @@ After the synthesis agent completes, validate the entire session directory again
 - `review-findings.md`
 - `context-brief.json`
 - `research-brief.json`
+- `budget-policy.json`
+- `budget-metrics.json`
+- `budget-summary.json`
 
 **Allowed directories and patterns**:
 
@@ -1564,6 +1576,9 @@ Skip this step for Quick tier sessions.
 
 ### Write session_end Event
 
+First refresh `budget-metrics.json` and write `budget-summary.json` per the shared Session Budget
+Summary protocol. If telemetry finalization fails, record a caveat and continue closing the review.
+
 Write the final `session_end` event to close the JSONL log:
 
 ```json
@@ -1587,6 +1602,20 @@ Write the final `session_end` event to close the JSONL log:
     "convergence_rate": 0.80,
     "specialist_utilization": 0.50,
     "escalations_count": 1
+  },
+  "budget_summary": {
+    "file": "budget-summary.json",
+    "summary_version": "1.1.0",
+    "state": "complete",
+    "final_level": "warning",
+    "highest_level_seen": "warning",
+    "max_ratio": 0.72,
+    "overshoot_fields": [],
+    "blocked_actions_count": 0,
+    "finalization_reserve_usage_known": true,
+    "finalization_reserve_used": 2,
+    "finalization_reserve_breached": false,
+    "legacy_fallback_used": false
   }
 }
 ```

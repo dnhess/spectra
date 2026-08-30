@@ -50,7 +50,7 @@ jobs:
             --include='*.md' \
             --exclude-dir='docs' \
             --exclude='CHANGELOG.md' \
-            shared/ deep-design/ decision-board/ code-review/ README.md CONTRIBUTING.md CLAUDE.md; then
+            shared/ deep-design/ decision-board/ peer-review/ trust-layer/ coherence-monitor/ README.md CONTRIBUTING.md CLAUDE.md; then
             echo "::error::Found hardcoded ~/.claude/ session paths. Use ~/.spectra/sessions/{skill}/ instead."
             exit 1
           fi

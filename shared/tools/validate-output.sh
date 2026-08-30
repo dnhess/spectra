@@ -26,7 +26,7 @@ Usage: bash validate-output.sh <file> <phase> <skill> [--warn-only]
 Arguments:
   file        Path to the agent output JSON file
   phase       Session phase (opening, discussion, final-positions)
-  skill       Skill name (deep-design, decision-board)
+  skill       Skill name (deep-design, decision-board, peer-review)
   --warn-only Log violations but allow processing (exit 2 instead of 1)
 
 Exit codes:
@@ -55,6 +55,7 @@ resolve_schema() {
   case "${phase}:${skill}" in
     opening:deep-design)         schema_file="opening-review.json" ;;
     opening:decision-board)      schema_file="opening-stance.json" ;;
+    opening:peer-review)         schema_file="peer-review-opening.schema.json" ;;
     discussion:deep-design)      schema_file="discussion-rebuttal.json" ;;
     discussion:decision-board)   schema_file="discussion-challenge.json" ;;
     final-positions:deep-design) schema_file="final-position-review.json" ;;
@@ -210,7 +211,13 @@ with open(sys.argv[2]) as f:
     schema = json.load(f)
 
 errors = []
-required = schema.get('required_fields', {})
+required = schema.get('required_fields')
+if required is None:
+    properties = schema.get('properties', {})
+    required = {
+        name: properties.get(name, {}).get('type', 'nullable')
+        for name in schema.get('required', [])
+    }
 
 for field_name, field_type in required.items():
     if field_name not in data:

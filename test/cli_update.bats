@@ -91,6 +91,32 @@ get_shim() {
   [[ -x "$SPECTRA_HOME/bin/spectra" ]]
 }
 
+@test "update installs the release Codex runtime adapter" {
+  bootstrap_installed_state
+  echo "0.2.0" > "$SPECTRA_HOME/version"
+
+  create_fake_tarball "$TEST_TEMP/release" "v0.3.0"
+
+  local shim
+  shim="$(get_shim)"
+  run "$shim" update
+  assert_success
+
+  local fake_codex="$TEST_TEMP/codex"
+  cat > "$fake_codex" <<'SCRIPT'
+#!/usr/bin/env bash
+[[ "${1:-}" == "--version" ]]
+printf 'codex-cli test\n'
+SCRIPT
+  chmod +x "$fake_codex"
+
+  run env SPECTRA_CODEX_BIN="$fake_codex" "$SPECTRA_CLI" runtime codex doctor
+  assert_success
+  assert_output --partial '"runtime": "codex"'
+  assert_output --partial '"status": "ready"'
+  [[ -f "$SPECTRA_HOME/skills/adapters/codex/codex-executor.py" ]]
+}
+
 @test "update writes new version to VERSION_FILE" {
   bootstrap_installed_state
   echo "0.2.0" > "$SPECTRA_HOME/version"
@@ -138,6 +164,12 @@ get_shim() {
   # settings.json should still have Spectra permissions
   [[ -f "$CLAUDE_HOME/settings.json" ]]
   run grep "json-write.sh" "$CLAUDE_HOME/settings.json"
+  assert_success
+  run grep "budget-policy.sh" "$CLAUDE_HOME/settings.json"
+  assert_success
+  run grep "budget-metrics.sh" "$CLAUDE_HOME/settings.json"
+  assert_success
+  run grep "budget-report.sh" "$CLAUDE_HOME/settings.json"
   assert_success
 }
 

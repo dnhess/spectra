@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Versioned provider-neutral runtime contracts for graph dependencies, logical paths, join
+  policies, retries, budgets, and runtime capability discovery
+- Codex adapter with strict validation, rendering, diagnostics, inert local dry runs, and an
+  approval-gated executable Quick peer-review opening phase
+- Digest-bound execution previews, allowlisted input staging, at-most-two worker concurrency,
+  read-only ephemeral Codex invocations, strict peer-review output validation, quorum handling,
+  moderator-only artifact publication, and serialized budget accounting
+- `spectra runtime` commands for listing and inspecting runtime adapters and validating,
+  rendering, dry-running, previewing, or executing a plan
+- Enforced session budget policies for all five skills, including dry-run estimates,
+  hard agent/model/round ceilings, phase-aware degradation, and reserved finalization capacity
+- Deterministic `budget-policy` helper and policy matrix for preflight planning and runtime checks
+- Atomic moderator-owned `budget-metrics` updater for real spawn, call, round, output, wall-time,
+  and phase-aware finalization telemetry
+- Local `spectra budget` reporting with JSON output, skill/limit filters, legacy-session support,
+  and finalized per-session `budget-summary.json` calibration artifacts
+- Recommendation-only `spectra budget calibrate` with strict finalized local evidence, policy
+  fingerprints, 20-session/seven-day gates, conservative headroom, and no automatic policy edits
+- Event schema 1.2.0 budget metadata while retaining 1.0.0 and 1.1.0 compatibility
+
+### Changed
+
+- Project positioning now treats Claude Code as the current default adapter rather than the
+  permanent orchestration boundary
+- Codex execution is documented as experimental until workers can use a dedicated minimal
+  runtime profile without unrelated installed-skill context overhead
+- Shared orchestration now applies budget checks at existing phase barriers and routes cheaper
+  models to routine work while reserving frontier models for high-value synthesis and arbitration
+- CI path checks now cover `peer-review`, `trust-layer`, and `coherence-monitor`
+- CLI session lifecycle/status checks now include trust-layer and coherence-monitor consistently
+
+### Fixed
+
+- Installer and CLI permissions now include the scoped budget-policy, budget-metrics, and
+  budget-report helpers
+- `spectra budget` now resolves its report helper from the linked repository in development mode
+- Security allowlists now recognize moderator-owned budget policy, metrics, and summary artifacts
+
 ## [0.4.1] - 2026-03-03
 
 ### Fixed
