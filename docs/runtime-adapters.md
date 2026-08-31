@@ -119,14 +119,24 @@ worker processes finish, including failure paths; it is not retained with sessio
 
 Preview also runs the local `codex debug prompt-input` renderer in an empty disposable home
 and directory. The rendered model input may contain only Codex's read-only permission policy,
-the synthetic environment context, and Spectra's sentinel. Skill instructions or any other
-developer/user content reject the binary before approval. Execute repeats this attestation
-immediately before every provider spawn.
+the synthetic environment context, Spectra's sentinel, and one system-skill manifest whose
+versioned preamble and five skill names match the adapter allowlist. Referenced regular files must
+all live below that disposable home's `skills/.system` directory. Spectra canonicalizes the
+temporary path and binds both the manifest and a descriptor-based, bounded snapshot of every
+system-skill file and directory into approval. Personal/admin paths, malformed manifests, or any
+other developer/user content reject the binary before approval. Execute repeats this compatibility
+snapshot immediately before every provider spawn.
+
+The debug renderer and provider execution are separate Codex invocations. Spectra terminates the
+probe process group before snapshotting and narrows the race window with immediate rechecks, but
+this is predictive compatibility evidence rather than attestation of the exact provider request.
+Closing that final gap requires upstream Codex support for exact-invocation prompt attestation.
 
 Workers use per-run private `HOME`, `CODEX_SQLITE_HOME`, `TMPDIR`, and XDG roots;
 caller-home and XDG-discovered files are not inherited. This closes the known personal
 user-profile discovery paths in fake-runtime tests, but does not itself suppress system
-configuration or bundled and administrator-installed skills. The live smoke's retained
+configuration or bundled system skills. Administrator-installed skills remain prohibited by
+the prompt attestation. The live smoke's retained
 operational state and an offline prompt rendering proved the desktop runtime injected bundled
 skills and unrelated orchestration instructions; the compatibility probe now rejects it before
 provider execution. Because a compatible Codex process would still receive a hard link to the

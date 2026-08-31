@@ -209,3 +209,71 @@
 - A future executable gate requires a standalone or updated Codex binary whose offline model-input
   rendering passes, followed by separately approved smoke validation. JSON usage capture remains a
   useful later observability improvement, not a remedy for injected context.
+
+## Standalone Codex compatibility gate
+
+### Plan
+
+- [x] Inventory existing standalone Codex installations and record resolved binaries and versions.
+- [x] Run the offline model-visible-context attestation against each distinct local binary.
+- [x] Confirm the official standalone install/update route without executing it.
+- [x] Stop installation after proving that the desktop host injects the same context into both the
+  standalone and desktop-bundled binaries; changing the binary cannot test this boundary here.
+- [x] Refine attestation to accept only a versioned, digest-bound system-skill allowlist rooted in
+  the disposable probe home while rejecting personal skills and unexpected host instructions.
+- [x] Re-run fake-executor, complete-suite, lint, parse, and diff verification.
+- [x] Stop before any provider worker and record the external-host boundary for a future smoke.
+
+### Guardrails
+
+- No live worker, model, or provider call during binary discovery and attestation.
+- Do not read, copy, print, or modify authentication contents.
+- Preserve the exact repository and its pre-existing untracked Python cache.
+- Keep installed binaries outside the repository and retain the desktop application unchanged.
+
+### Investigation result
+
+- Three local Codex surfaces were found: desktop `0.148.0-alpha.15`, a broken Homebrew-linked npm
+  wrapper for `0.119.0`, and a working standalone `0.147.0` native arm64 binary. The standalone
+  binary SHA-256 is `19c4f144c5226a9f17c58e6f0fa854843b0f77a6eb420f40e2745a12f10f5d37`.
+- The working standalone binary failed the offline attestation with the same model-visible context
+  seen through the desktop-bundled binary: a system-skill catalog plus unrelated `/root` team
+  orchestration and `multi_agent_mode` developer instructions. Empty `HOME`, `CODEX_HOME`, XDG,
+  temporary, and working directories did not remove those messages.
+- The binary file is therefore not the contamination source in this task. The current Codex desktop
+  host/session is the common boundary, so installing another binary here would not provide evidence
+  of compatibility. The official standalone route was confirmed but not executed.
+- Official Codex system skills are a normal supported prompt component. The compatibility contract
+  must distinguish a stable, disposable-home system-skill manifest from personal/admin skills and
+  unrelated host developer messages rather than rejecting every skill block.
+- No provider/model worker ran, authentication was not read or copied, and repository source was not
+  transmitted. A live smoke remains out of scope until preview is run from an external terminal,
+  CI job, or container outside the Codex desktop host.
+
+### Review
+
+- Prompt-context attestation v2 accepts either no skill block or exactly the current five-name
+  built-in system-skill allowlist with the versioned Codex preamble, one lexical disposable-home
+  root, alias-relative paths, and no unknown prompt JSON fields.
+- The probe process group is terminated before validation. A descriptor-based snapshot rejects
+  symlinks, special files, hardlinks, foreign ownership, traversal errors, personal siblings,
+  excessive depth/count/bytes, and mutation during reads. File contents and modes, empty
+  directories, and the `.system` root mode are all bound into approval without being emitted.
+- Execute recomputes the compatibility snapshot before each serialized provider spawn. A test that
+  changes only system-skill contents after the first fake worker proves the second spawn is stopped.
+- Adversarial fake coverage includes injected preamble/label/closing text, unknown JSON fields,
+  ancestor symlinks, FIFO, hardlink, unreadable subtree, excessive depth, mode changes, surviving
+  descendants, personal roots/siblings, and between-spawn context mutation. The focused executor
+  suite passes 32/32.
+- The logical complete repository suite passes 382/382: the full run's only two failures were the
+  known workspace sandbox restriction on repository-local dry-run temp directories, and both pass
+  with their intended write boundary. Markdown lint across 84 files, ShellCheck, Python/JSON parse,
+  and diff hygiene pass.
+- The standalone `0.147.0` binary still fails locally because the desktop host supplies a combined
+  non-isolated skill manifest and unrelated developer instructions. No installation or provider
+  call ran. The next gate is an offline preview from a terminal/CI/container outside this desktop
+  host, followed by a separately approved one-worker smoke only if that preview passes.
+- This remains a predictive `debug prompt-input` compatibility snapshot from a separate invocation,
+  not proof of the exact provider request; closing that gap requires upstream Codex support.
+- Final read-only staff review found no blocking security or correctness issues after independently
+  reproducing the directory-mode race check and confirming it now fails closed.

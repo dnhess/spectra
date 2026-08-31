@@ -41,7 +41,27 @@ MAX_PROFILE_CONFIG_BYTES = 256 * 1024
 MAX_PROFILE_AUTH_BYTES = 256 * 1024
 MAX_DEADLINE_SECONDS = 300
 MAX_PROMPT_CONTEXT_BYTES = 256 * 1024
+MAX_SYSTEM_SKILL_FILES = 512
+MAX_SYSTEM_SKILL_BYTES = 8 * 1024 * 1024
+MAX_SYSTEM_SKILL_DIRECTORIES = 128
+MAX_SYSTEM_SKILL_DEPTH = 8
 PROMPT_CONTEXT_SENTINEL = "spectra-prompt-context-probe-v1"
+PROMPT_CONTEXT_ATTESTATION = "codex-debug-prompt-input-v2"
+SYSTEM_SKILL_ROOT_RE = re.compile(r"^- `(r[0-9]+)` = `(/[^`\r\n]+)`$")
+SYSTEM_SKILL_ENTRY_RE = re.compile(r"^- ([a-z][a-z0-9-]*): \(file: ([^)\r\n]+)\)$")
+INLINE_ABSOLUTE_PATH_RE = re.compile(r"`(/[^`\r\n]+)`")
+SYSTEM_SKILL_PREAMBLE = (
+    "A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. "
+    "Below is the list of skills that can be used. Each entry includes a name, description, "
+    "and a short path that can be expanded into an absolute path using the skill roots table."
+)
+SYSTEM_SKILLS = {
+    "imagegen": PurePosixPath("imagegen/SKILL.md"),
+    "openai-docs": PurePosixPath("openai-docs/SKILL.md"),
+    "plugin-creator": PurePosixPath("plugin-creator/SKILL.md"),
+    "skill-creator": PurePosixPath("skill-creator/SKILL.md"),
+    "skill-installer": PurePosixPath("skill-installer/SKILL.md"),
+}
 MODEL_ENV = {
     "economical": "SPECTRA_CODEX_MODEL_ECONOMICAL",
     "standard": "SPECTRA_CODEX_MODEL_STANDARD",
@@ -398,14 +418,224 @@ def codex_environment(codex_home: Path, private_root: Path) -> dict[str, str]:
     return env
 
 
-def validate_prompt_context(value: Any) -> dict[str, Any]:
+def secure_system_skill_snapshot(
+    codex_home: Path,
+    error: str,
+) -> tuple[dict[str, Any], set[str]]:
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    file_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    manifest: list[dict[str, Any]] = []
+    file_paths: set[str] = set()
+    file_count = 0
+    directory_count = 1
+    total_bytes = 0
+
+    def identity(info: os.stat_result) -> tuple[int, ...]:
+        return (
+            info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
+            info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_nlink,
+        )
+
+    def visit(directory_fd: int, prefix: PurePosixPath, depth: int) -> None:
+        nonlocal file_count, directory_count, total_bytes
+        if depth > MAX_SYSTEM_SKILL_DEPTH:
+            raise ExecutorError(error)
+        before = os.fstat(directory_fd)
+        if not stat.S_ISDIR(before.st_mode) or before.st_uid != os.geteuid():
+            raise ExecutorError(error)
+        manifest.append({
+            "kind": "directory",
+            "path": prefix.as_posix() if prefix.parts else ".",
+            "mode": stat.S_IMODE(before.st_mode),
+        })
+        try:
+            names = sorted(os.listdir(directory_fd))
+        except OSError:
+            raise ExecutorError(error) from None
+        for name in names:
+            relative = prefix / name
+            try:
+                listed = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            except OSError:
+                raise ExecutorError(error) from None
+            if stat.S_ISDIR(listed.st_mode):
+                directory_count += 1
+                if directory_count > MAX_SYSTEM_SKILL_DIRECTORIES:
+                    raise ExecutorError(error)
+                try:
+                    child_fd = os.open(name, directory_flags, dir_fd=directory_fd)
+                except OSError:
+                    raise ExecutorError(error) from None
+                try:
+                    opened = os.fstat(child_fd)
+                    if identity(listed) != identity(opened):
+                        raise ExecutorError(error)
+                    visit(child_fd, relative, depth + 1)
+                finally:
+                    os.close(child_fd)
+                continue
+            if not stat.S_ISREG(listed.st_mode):
+                raise ExecutorError(error)
+            file_count += 1
+            if file_count > MAX_SYSTEM_SKILL_FILES or listed.st_nlink != 1:
+                raise ExecutorError(error)
+            try:
+                file_fd = os.open(name, file_flags, dir_fd=directory_fd)
+            except OSError:
+                raise ExecutorError(error) from None
+            digest = hashlib.sha256()
+            size = 0
+            try:
+                opened = os.fstat(file_fd)
+                if (
+                    identity(listed) != identity(opened)
+                    or not stat.S_ISREG(opened.st_mode)
+                    or opened.st_uid != os.geteuid()
+                ):
+                    raise ExecutorError(error)
+                while True:
+                    block = os.read(file_fd, 128 * 1024)
+                    if not block:
+                        break
+                    size += len(block)
+                    if total_bytes + size > MAX_SYSTEM_SKILL_BYTES:
+                        raise ExecutorError(error)
+                    digest.update(block)
+                after = os.fstat(file_fd)
+                if identity(opened) != identity(after) or size != after.st_size:
+                    raise ExecutorError(error)
+            finally:
+                os.close(file_fd)
+            relative_text = relative.as_posix()
+            file_paths.add(relative_text)
+            total_bytes += size
+            manifest.append({
+                "kind": "file",
+                "path": relative_text,
+                "mode": stat.S_IMODE(opened.st_mode),
+                "size": size,
+                "sha256": digest.hexdigest(),
+            })
+        after = os.fstat(directory_fd)
+        if identity(before) != identity(after):
+            raise ExecutorError(error)
+
+    home_fd = skills_fd = root_fd = -1
+    try:
+        home_fd = os.open(codex_home, directory_flags)
+        home_before = os.fstat(home_fd)
+        skills_fd = os.open("skills", directory_flags, dir_fd=home_fd)
+        skills_before = os.fstat(skills_fd)
+        if sorted(os.listdir(skills_fd)) != [".system"]:
+            raise ExecutorError(error)
+        root_fd = os.open(".system", directory_flags, dir_fd=skills_fd)
+        visit(root_fd, PurePosixPath(), 0)
+        if identity(skills_before) != identity(os.fstat(skills_fd)):
+            raise ExecutorError(error)
+        if identity(home_before) != identity(os.fstat(home_fd)):
+            raise ExecutorError(error)
+    except OSError:
+        raise ExecutorError(error) from None
+    finally:
+        for descriptor in (root_fd, skills_fd, home_fd):
+            if descriptor >= 0:
+                os.close(descriptor)
+    return ({
+        "file_count": file_count,
+        "directory_count": directory_count,
+        "bytes": total_bytes,
+        "sha256": sha256_bytes(canonical_json(manifest)),
+    }, file_paths)
+
+
+def system_skill_attestation(text: str, codex_home: Path) -> dict[str, Any]:
+    """Validate and summarize Codex's disposable built-in system-skill manifest."""
+    error = "Codex prompt context includes invalid or non-isolated system skill instructions"
+    lines = text.splitlines()
+    if lines[:3] != ["<skills_instructions>", "## Skills", SYSTEM_SKILL_PREAMBLE]:
+        raise ExecutorError(error)
+    if not text.endswith("</skills_instructions>") or lines[-1] != "</skills_instructions>":
+        raise ExecutorError(error)
+    if lines.count("### Skill roots") != 1 or lines.count("### Available skills") != 1:
+        raise ExecutorError(error)
+    roots_start = lines.index("### Skill roots")
+    skills_start = lines.index("### Available skills")
+    if roots_start != 3 or roots_start >= skills_start:
+        raise ExecutorError(error)
+
+    system_root = codex_home / "skills" / ".system"
+
+    roots: dict[str, Path] = {}
+    for line in lines[roots_start + 1:skills_start]:
+        match = SYSTEM_SKILL_ROOT_RE.fullmatch(line)
+        if match is None or match.group(1) in roots:
+            raise ExecutorError(error)
+        root = Path(match.group(2))
+        if root != system_root:
+            raise ExecutorError(error)
+        roots[match.group(1)] = root
+    if len(roots) != 1:
+        raise ExecutorError(error)
+
+    referenced_files: set[str] = set()
+    skill_names: set[str] = set()
+    for line in lines[skills_start + 1:-1]:
+        match = SYSTEM_SKILL_ENTRY_RE.fullmatch(line)
+        if match is None:
+            raise ExecutorError(error)
+        skill_name = match.group(1)
+        locator = match.group(2)
+        if skill_name not in SYSTEM_SKILLS or skill_name in skill_names:
+            raise ExecutorError(error)
+        if locator.startswith("/"):
+            raise ExecutorError(error)
+        alias, separator, relative = locator.partition("/")
+        relative_path = PurePosixPath(relative)
+        relative_text = relative_path.as_posix()
+        if (
+            not separator
+            or alias not in roots
+            or ".." in relative_path.parts
+            or relative_path != SYSTEM_SKILLS[skill_name]
+            or relative_text in referenced_files
+        ):
+            raise ExecutorError(error)
+        referenced_files.add(relative_text)
+        skill_names.add(skill_name)
+    if skill_names != set(SYSTEM_SKILLS):
+        raise ExecutorError(error)
+
+    if INLINE_ABSOLUTE_PATH_RE.findall(text) != [str(system_root)]:
+        raise ExecutorError(error)
+
+    tree, tree_files = secure_system_skill_snapshot(codex_home, error)
+    if not referenced_files.issubset(tree_files):
+        raise ExecutorError(error)
+
+    canonical = text.replace(str(codex_home), "$CODEX_HOME")
+    return {
+        "count": len(referenced_files),
+        "sha256": sha256_bytes(canonical.encode("utf-8")),
+        "tree_file_count": tree["file_count"],
+        "tree_directory_count": tree["directory_count"],
+        "tree_bytes": tree["bytes"],
+        "tree_sha256": tree["sha256"],
+    }
+
+
+def validate_prompt_context(value: Any, codex_home: Path) -> dict[str, Any]:
     if not isinstance(value, list) or not value or len(value) > 32:
         raise ExecutorError("Codex prompt-context probe returned an invalid message list")
     permissions_contexts = 0
     environment_contexts = 0
     sentinels = 0
+    system_skills: dict[str, Any] | None = None
     for message_index, message in enumerate(value):
-        if not isinstance(message, dict) or message.get("type") != "message":
+        if (
+            not isinstance(message, dict)
+            or set(message) != {"type", "role", "content"}
+            or message.get("type") != "message"
+        ):
             raise ExecutorError(
                 f"Codex prompt context contains an unexpected item at index {message_index}"
             )
@@ -418,6 +648,7 @@ def validate_prompt_context(value: Any) -> dict[str, Any]:
         for content_index, item in enumerate(content):
             if (
                 not isinstance(item, dict)
+                or set(item) != {"type", "text"}
                 or item.get("type") != "input_text"
                 or not isinstance(item.get("text"), str)
             ):
@@ -428,9 +659,10 @@ def validate_prompt_context(value: Any) -> dict[str, Any]:
             text = item["text"]
             if role == "developer":
                 if text.startswith("<skills_instructions>"):
-                    raise ExecutorError(
-                        "Codex prompt context includes bundled or installed skill instructions"
-                    )
+                    if system_skills is not None:
+                        raise ExecutorError("Codex prompt context includes multiple skill manifests")
+                    system_skills = system_skill_attestation(text, codex_home)
+                    continue
                 if not (
                     text.startswith("<permissions instructions>")
                     and text.rstrip().endswith("</permissions instructions>")
@@ -452,11 +684,59 @@ def validate_prompt_context(value: Any) -> dict[str, Any]:
     if sentinels != 1 or permissions_contexts > 1 or environment_contexts > 1:
         raise ExecutorError("Codex prompt-context probe did not preserve the minimal input boundary")
     return {
-        "probe": "codex-debug-prompt-input-v1",
+        "probe": PROMPT_CONTEXT_ATTESTATION,
         "permissions_context_present": permissions_contexts == 1,
         "environment_context_present": environment_contexts == 1,
+        "system_skill_context_present": system_skills is not None,
+        "system_skill_count": 0 if system_skills is None else system_skills["count"],
+        "system_skill_sha256": None if system_skills is None else system_skills["sha256"],
+        "system_skill_tree_file_count": (
+            0 if system_skills is None else system_skills["tree_file_count"]
+        ),
+        "system_skill_tree_directory_count": (
+            0 if system_skills is None else system_skills["tree_directory_count"]
+        ),
+        "system_skill_tree_bytes": 0 if system_skills is None else system_skills["tree_bytes"],
+        "system_skill_tree_sha256": (
+            None if system_skills is None else system_skills["tree_sha256"]
+        ),
         "unexpected_context_present": False,
     }
+
+
+def run_prompt_context_probe(
+    arguments: list[str],
+    env: dict[str, str],
+    timeout: float,
+) -> subprocess.CompletedProcess[bytes]:
+    process = subprocess.Popen(
+        arguments,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        start_new_session=True,
+    )
+
+    def terminate_group() -> None:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+    try:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            terminate_group()
+            process.communicate()
+            raise
+        terminate_group()
+        return subprocess.CompletedProcess(arguments, process.returncode, stdout, stderr)
+    finally:
+        if process.poll() is None:
+            terminate_group()
+            process.wait()
 
 
 def prompt_context_info(binary: Path, timeout: float = 5.0) -> dict[str, Any]:
@@ -472,26 +752,30 @@ def prompt_context_info(binary: Path, timeout: float = 5.0) -> dict[str, Any]:
             for feature in DISABLED_CODEX_FEATURES:
                 arguments.extend(["--disable", feature])
             arguments.extend(["debug", "prompt-input", PROMPT_CONTEXT_SENTINEL])
-            completed = subprocess.run(
+            completed = run_prompt_context_probe(
                 arguments,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=max(0.01, min(timeout, 5.0)),
-                check=False,
-                env=env,
+                env,
+                max(0.01, min(timeout, 5.0)),
+            )
+            if completed.returncode != 0:
+                raise ExecutorError(
+                    f"Codex prompt-context compatibility probe exited {completed.returncode}"
+                )
+            if (
+                len(completed.stdout) > MAX_PROMPT_CONTEXT_BYTES
+                or len(completed.stderr) > MAX_PROMPT_CONTEXT_BYTES
+            ):
+                raise ExecutorError(
+                    "Codex prompt-context compatibility probe exceeded its output limit"
+                )
+            return validate_prompt_context(
+                strict_json_bytes(
+                    completed.stdout, "Codex prompt-context compatibility probe"
+                ),
+                codex_home,
             )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ExecutorError(f"Codex prompt-context compatibility probe failed: {exc}") from None
-    if completed.returncode != 0:
-        raise ExecutorError(
-            f"Codex prompt-context compatibility probe exited {completed.returncode}"
-        )
-    if len(completed.stdout) > MAX_PROMPT_CONTEXT_BYTES or len(completed.stderr) > MAX_PROMPT_CONTEXT_BYTES:
-        raise ExecutorError("Codex prompt-context compatibility probe exceeded its output limit")
-    return validate_prompt_context(
-        strict_json_bytes(completed.stdout, "Codex prompt-context compatibility probe")
-    )
 
 
 def model_map(plan: dict[str, Any]) -> dict[str, str]:
@@ -789,7 +1073,7 @@ def build_preview(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, A
             "private_xdg_roots": True,
             "private_operational_codex_home": True,
             "cli_auth_credentials_store": "file",
-            "prompt_context_probe": "codex-debug-prompt-input-v1",
+            "prompt_context_probe": PROMPT_CONTEXT_ATTESTATION,
         },
         "declared_inputs": {
             action_id: [entry.as_dict() for entry in entries]

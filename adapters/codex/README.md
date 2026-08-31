@@ -41,9 +41,18 @@ probes; neither invokes a model or transmits project data.
 
 The prompt-context probe uses an empty disposable home, isolated current directory,
 disabled optional features, and a sentinel prompt. It accepts only Codex's read-only
-permission context, synthetic environment context, and the sentinel. Bundled or installed
-skill instructions, unexpected developer instructions, and unexpected user content fail
-preview. The same attestation runs immediately before every provider spawn.
+permission context, synthetic environment context, the sentinel, and at most one system-skill
+manifest matching the adapter's versioned preamble and five-name allowlist. Every referenced
+file must be below that disposable home's `skills/.system` directory. The canonicalized manifest
+and a descriptor-based, bounded snapshot of every system-skill file and directory are bound into
+approval; personal/admin skill paths, malformed manifests, unexpected developer instructions,
+and unexpected user content fail preview. The same compatibility snapshot runs immediately
+before every provider spawn.
+
+This is a predictive check performed by a separate local `debug prompt-input` process, not an
+attestation of the exact later provider request. The executor terminates the probe process group
+before snapshotting and rechecks immediately before spawn, but exact request attestation requires
+upstream Codex support. No provider call is allowed when the compatibility snapshot fails.
 
 Workers receive private staged copies of only their declared workspace inputs and run
 with per-run private `HOME`, `CODEX_SQLITE_HOME`, `TMPDIR`, and XDG roots. User files
