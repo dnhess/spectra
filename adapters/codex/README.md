@@ -114,3 +114,13 @@ when credential confidentiality from worker subprocesses is required.
 
 The executor requires Python 3.10+ and is currently Unix-only because it uses
 process groups and resource limits for timeout and log cleanup.
+
+The dormant, manually dispatched clean-host diagnostic is available at
+`.github/workflows/codex-clean-host-inspect.yml`. It pins the exact Codex package version and
+expected native SHA, targets Linux/amd64 on a GitHub-hosted runner, and runs in a
+network-disabled, read-only container with sanitized, host-bounded evidence collection. It
+supplies no auth, project inputs, model mapping, or provider call, and publishes only a redacted
+report artifact. The report is evidence-only and cannot authorize execution; this workflow has
+not been run. Docker daemon/kernel and container-escape boundaries, same-user executable
+behavior, diagnostic evasion, clean-host reproducibility, exact-request attestation, and
+OS-level read isolation remain limitations.

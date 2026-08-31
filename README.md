@@ -141,6 +141,13 @@ Additional infrastructure:
   remains experimental pending a clean runtime attestation and stronger OS read isolation. See
   [`docs/runtime-adapters.md`](docs/runtime-adapters.md).
 
+  An available but dormant manual clean-host diagnostic is
+  `.github/workflows/codex-clean-host-inspect.yml`: pinned Codex package version/native SHA,
+  Linux/amd64 GitHub-hosted network-disabled read-only container, sanitized host-bounded
+  evidence, no authentication/project/model/provider inputs, and a redacted evidence-only
+  report. It has not been run and cannot authorize execution. Docker daemon/kernel and
+  container-escape, diagnostic-evasion, exact-request, and OS read-isolation limits remain.
+
 ## Context Persistence
 
 Sessions leave a trail for future sessions to build on:

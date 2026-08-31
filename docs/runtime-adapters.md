@@ -186,3 +186,16 @@ followed by a separately approved one-worker smoke and operating-system read-iso
 Discussion, synthesis, retries,
 dependencies, nested workers, resume, and large fleets remain explicitly
 unsupported until this slice produces trustworthy evidence.
+
+### Available manual clean-host offline diagnostic
+
+The dormant, manually dispatched gate is available at
+`.github/workflows/codex-clean-host-inspect.yml`. Its supply chain is pinned to the exact
+Codex package version and expected native binary SHA, and it targets Linux/amd64 on a
+GitHub-hosted runner. The diagnostic runs in a network-disabled, read-only container with
+sanitized, host-bounded evidence collection. It supplies no authentication, project inputs,
+model mapping, or provider request, and uploads only a redacted report artifact.
+That report is evidence for review, not authorization to execute. This workflow has not yet
+been run. Residual risks include the Docker daemon/kernel and container-escape boundary,
+same-user executable behavior, and diagnostic evasion; clean-host reproducibility and exact
+provider-request attestation remain separate limitations.

@@ -380,3 +380,53 @@
 - The stable content fingerprint still represents the contaminated host baseline and does not
   approve it. A live smoke remains blocked pending evidence from a genuinely separate clean
   machine, VM, container, or CI runner with the required OS-level read isolation.
+
+## Clean-host offline diagnostic gate
+
+### Plan
+
+- [x] Add a manually dispatched GitHub-hosted workflow; never run it for pushes or pull requests.
+- [x] Require an exact Codex package version and expected native executable SHA-256.
+- [x] Build from a minimal context containing only the diagnostic executor and container recipe.
+- [x] Run `inspect-context` as an unprivileged user in a read-only, capability-free,
+  network-disabled container with bounded memory/processes and private temporary filesystems.
+- [x] Supply no authentication, model, plan, approval token, project checkout, or provider command
+  to the runtime container.
+- [x] Validate the redacted report's factual control flags and binary identity before uploading only
+  the report and non-secret provenance with short retention.
+- [x] Add static workflow/container tests that fail if the manual-only, no-network, no-secret, or
+  inspect-only boundaries drift.
+- [x] Document that captured fingerprints are evidence only and cannot authorize preview/execute.
+- [x] Run focused/full verification and final read-only security review before committing.
+
+### Guardrails
+
+- Package download and image construction may use network before runtime, but receive no secrets and
+  use only a minimal build context.
+- Runtime must use `--network none`, a read-only root, no added capabilities, no repository mount,
+  and an empty environment apart from explicit non-secret runtime variables.
+- Never upload stderr, raw renderer output, credentials, environment dumps, or Docker inspection.
+- Do not automatically bless a clean-host fingerprint or expand the production semantic allowlist.
+- A live provider smoke remains a separate explicit approval after clean-host evidence and OS-level
+  read isolation are both reviewed.
+- The workflow targets Linux/amd64 and remains subject to Docker daemon/kernel and container-escape
+  risks, as well as diagnostic evasion by a hostile executable; its sanitized, host-bounded report
+  is evidence only and does not establish exact provider-request behavior.
+
+### Review
+
+- The workflow remains dormant and manual-only. No workflow dispatch, Docker runtime, network
+  access, package download, artifact upload, provider request, or Codex worker ran during this work.
+- Immutable action and base-image pins, the exact Linux x64 native path, the expected SHA-256, and
+  the ELF architecture are bound before the offline diagnostic can run.
+- Host-side capture is independently bounded for stdout, stderr, and time; named-container cleanup,
+  disabled Docker logging, no runtime mounts, and reconstructed-only `0600` evidence are enforced.
+- The recursive report validator rejects unknown and duplicate JSON keys. Content and metadata
+  boundaries are recomputed, including the fingerprint for non-list `content_value` evidence.
+- Focused clean-host fakes pass 11/11 and the complete inert repository suite passes 409/409.
+  Markdown lint, ShellCheck, Python AST parsing, workflow YAML parsing, diff hygiene, and an offline
+  replay of the five-message redacted report also pass.
+- Final independent read-only review found no blocking findings. The generated clean-host bytecode
+  cache was moved to a recoverable temporary location; the pre-existing adapter cache was preserved.
+- A future manual dispatch requires an exact Codex package version and native Linux x64 SHA-256.
+  Even a successful report remains evidence-only and cannot authorize a real worker.

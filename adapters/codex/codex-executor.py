@@ -994,12 +994,15 @@ def redact_prompt_context(value: Any, probe_root: Path, codex_home: Path) -> dic
             summary["content_value"] = diagnostic_fingerprint(content)
         summary["content"] = content_summaries
         summaries.append(summary)
-        content_boundary.append({
+        content_boundary_entry = {
             "index": index,
             "role": summary["role"],
             "type": summary["type"],
             "content": content_summaries,
-        })
+        }
+        if "content_value" in summary:
+            content_boundary_entry["content_value"] = summary["content_value"]
+        content_boundary.append(content_boundary_entry)
         metadata_boundary.append({
             "index": index,
             "known_keys": known,
