@@ -7,7 +7,16 @@ executor for one bounded workflow: the opening fan-out of Quick peer review.
 adapters/codex/codex-runtime.sh capabilities
 adapters/codex/codex-runtime.sh validate shared/runtime/fixtures/peer-review-quick.plan.json
 adapters/codex/codex-runtime.sh dry-run shared/runtime/fixtures/peer-review-quick.plan.json
+adapters/codex/codex-runtime.sh inspect-context --codex-bin /absolute/path/to/codex
 ```
+
+`inspect-context` is an offline diagnostic. It runs the same isolated local `--version` and
+`debug prompt-input` subcommands as preview; Spectra supplies no authentication or project
+inputs and invokes no provider subcommand. It reports only message structure, canonicalized byte
+counts and SHA-256 fingerprints, envelope-metadata fingerprints, and fixed known system-skill
+names. All other observed names are counted and hashed, not shown. Raw prompt
+text, metadata values, skill contents, and temporary paths are never emitted. Diagnostic success
+does not mean preview would accept the context and cannot authorize execution.
 
 ## Approved execution
 
@@ -89,7 +98,9 @@ when credential confidentiality from worker subprocesses is required.
 - Local orchestration and artifact storage, but approved worker calls send the
   staged project content to the configured Codex/OpenAI model service
 - The adapter does not enable web search or extra writable directories. It does
-  not claim provider-level network isolation beyond the tested CLI sandbox.
+  not claim provider-level network isolation beyond the tested CLI sandbox. A same-user
+  Codex binary retains host-readable filesystem, keychain, and network capabilities;
+  these guarantees rely on expected Codex debug semantics.
 - Staging controls which project files Spectra supplies in the worker directory;
   Codex's read-only sandbox prevents writes but is not an OS-level read allowlist.
   A same-user worker may still be able to read other host-readable paths.

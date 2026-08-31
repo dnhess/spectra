@@ -62,3 +62,31 @@ SCRIPT
   assert_output --partial '"codex_invoked": false'
   assert_output --partial 'worker tools request no network'
 }
+
+@test "inspect-context is offline redacted and requires no execution profile" {
+  local fake_bin="$TEST_TEMP/codex"
+  cat > "$fake_bin" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--version" ]]; then
+  printf 'codex-cli test\n'
+  exit 0
+fi
+[[ "${1:-}" == "-C" ]]
+shift 2
+while [[ "${1:-}" == "--disable" ]]; do shift 2; done
+[[ "${1:-}" == "debug" && "${2:-}" == "prompt-input" ]]
+printf '%s\n' '[{"type":"message","role":"developer","id":"dynamic-id","internal_chat_message_metadata_passthrough":{},"content":[{"type":"input_text","text":"unapproved diagnostic fixture"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"spectra-prompt-context-probe-v1"}]}]'
+SCRIPT
+  chmod +x "$fake_bin"
+
+  run "$RUNTIME" inspect-context --codex-bin "$fake_bin"
+  assert_success
+  assert_output --partial '"operation": "inspect-context"'
+  assert_output --partial '"authentication_supplied": false'
+  assert_output --partial '"provider_subcommand_invoked": false'
+  assert_output --partial '"project_content_supplied": false'
+  assert_output --partial '"codex_cli_debug_subcommand_invoked": true'
+  assert_output --partial '"raw_content_emitted": false'
+  refute_output --partial 'unapproved diagnostic fixture'
+}

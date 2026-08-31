@@ -65,6 +65,7 @@ spectra update      # Update to latest release
 spectra doctor      # Diagnose issues
 spectra runtime list # Show available runtime adapters
 spectra runtime codex capabilities # Inspect Codex planning and bounded execution support
+spectra runtime codex inspect-context --codex-bin /absolute/path/to/codex # Redacted offline prompt fingerprint
 spectra uninstall   # Remove Spectra
 ```
 

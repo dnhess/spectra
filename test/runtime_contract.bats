@@ -25,6 +25,7 @@ teardown() { _common_teardown; }
   assert_output --partial '"requires_explicit_execution_profile": true'
   assert_output --partial '"isolates_user_home": true'
   assert_output --partial '"supported_operations"'
+  assert_output --partial '"inspect-context"'
 }
 
 @test "validation rejects path traversal and network access" {

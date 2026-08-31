@@ -1186,7 +1186,7 @@ cmd_runtime() {
   require_installed
 
   if [[ -z "$runtime" ]]; then
-    log_error "Usage: spectra runtime <list|codex> [capabilities|doctor|validate|render|dry-run|preview|execute]"
+    log_error "Usage: spectra runtime <list|codex> [capabilities|doctor|validate|render|dry-run|inspect-context|preview|execute]"
     exit 1
   fi
   shift
@@ -1214,6 +1214,12 @@ cmd_runtime() {
         exit 1
       fi
       ;;
+    inspect-context)
+      if ! { [[ "$#" -ge 2 ]] && runtime_has_option --codex-bin "$@"; }; then
+        log_error "Usage: spectra runtime $runtime inspect-context --codex-bin <path>"
+        exit 1
+      fi
+      ;;
     preview)
       if ! { [[ "$#" -ge 2 ]] &&
         runtime_has_option --workspace-root "$@" &&
@@ -1237,7 +1243,7 @@ cmd_runtime() {
       ;;
     *)
       log_error "Unknown $runtime runtime command: ${action:-missing}"
-      log_info "Available commands: capabilities, doctor, validate, render, dry-run, preview, execute"
+      log_info "Available commands: capabilities, doctor, validate, render, dry-run, inspect-context, preview, execute"
       exit 1
       ;;
   esac

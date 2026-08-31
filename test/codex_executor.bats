@@ -30,8 +30,20 @@ fake_prompt_probe() {
   [[ "${3:-}" == "spectra-prompt-context-probe-v1" ]]
   [[ $# -eq 3 ]]
   printf 'prompt-context\n' >> "$(dirname "$0")/invocations.log"
+  printf 'probe-cwd\t%s\n' "$PWD" >> "$(dirname "$0")/invocations.log"
+  if [[ -f "$(dirname "$0")/assert-empty-cwd" ]]; then
+    [[ -z "$(find "$PWD" -mindepth 1 -maxdepth 1 -print -quit)" ]]
+  fi
+  if [[ -f "$(dirname "$0")/prompt-overflow" ]]; then
+    head -c 300000 /dev/zero
+    exit 0
+  fi
+  if [[ -f "$(dirname "$0")/prompt-stderr-overflow" ]]; then
+    head -c 300000 /dev/zero >&2
+    exit 0
+  fi
   if [[ -f "$(dirname "$0")/extra-json-field" ]]; then
-    printf '%s\n' '[{"type":"message","role":"developer","content":[{"type":"input_text","text":"<permissions instructions>read-only</permissions instructions>","unexpected":true}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"spectra-prompt-context-probe-v1"}]}]'
+    printf '%s\n' '[{"type":"message","role":"developer","content":[{"type":"input_text","text":"<permissions instructions>read-only</permissions instructions>","unexpected":"hidden-diagnostic-value"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"spectra-prompt-context-probe-v1"}]}]'
   elif [[ -f "$(dirname "$0")/contaminated-context" ]]; then
     printf '%s\n' '[{"type":"message","role":"developer","content":[{"type":"input_text","text":"<skills_instructions>unrelated skill</skills_instructions>"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"spectra-prompt-context-probe-v1"}]}]'
   elif [[ -f "$(dirname "$0")/host-context" ]]; then
@@ -53,6 +65,9 @@ fake_prompt_probe() {
     if [[ -f "$(dirname "$0")/system-with-personal" ]]; then
       mkdir -p "$CODEX_HOME/skills/personal"
       printf '%s\n' 'hidden personal skill fixture' > "$CODEX_HOME/skills/personal/SKILL.md"
+    fi
+    if [[ -f "$(dirname "$0")/secret-like-system-name" ]]; then
+      mkdir -p "$CODEX_HOME/skills/.system/sk_live_0123456789abcdef"
     fi
     skill_preamble='A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, description, and a short path that can be expanded into an absolute path using the skill roots table.'
     root_path="$CODEX_HOME/skills/.system"
@@ -94,6 +109,9 @@ fake_prompt_probe() {
     fi
     if [[ -f "$(dirname "$0")/probe-descendant" ]]; then
       (sleep 0.2; : > "$(dirname "$0")/descendant-survived") >/dev/null 2>&1 &
+    fi
+    if [[ -f "$(dirname "$0")/descendant-inherits-pipes" ]]; then
+      (sleep 0.2; : > "$(dirname "$0")/descendant-inherits-pipes-survived") &
     fi
     system_text="<skills_instructions>\\n## Skills\\n$skill_preamble\\n### Skill roots\\n- \`r0\` = \`$root_path\`\\n### Available skills\\n- $imagegen_name: (file: r0/imagegen/SKILL.md)\\n- openai-docs: (file: r0/openai-docs/SKILL.md)\\n- plugin-creator: (file: r0/plugin-creator/SKILL.md)\\n- skill-creator: (file: r0/skill-creator/SKILL.md)\\n- skill-installer: (file: r0/skill-installer/SKILL.md)\\n$closing"
     printf '%s\n' '[{"type":"message","role":"developer","content":[{"type":"input_text","text":"'"$system_text"'"}]},{"type":"message","role":"developer","content":[{"type":"input_text","text":"<permissions instructions>read-only</permissions instructions>"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>isolated</environment_context>"}]},{"type":"message","role":"user","content":[{"type":"input_text","text":"spectra-prompt-context-probe-v1"}]}]'
@@ -191,6 +209,47 @@ fi
 sleep 0.12
 printf '{"reviewer":"%s","findings":[]}\n' "$worker" > "$output"
 printf 'end %s\n' "$worker" >> "$log"
+FAKE
+  chmod +x "$FAKE_CODEX"
+}
+
+write_inspect_fake() {
+  cat > "$FAKE_CODEX" <<'FAKE'
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname "$0")/prompt-probe.sh"
+fake_prompt_probe "$@"
+if [[ "${1:-}" == "--version" ]]; then
+  log="$(dirname "$0")/invocations.log"
+  printf 'version\nversion-cwd\t%s\n' "$PWD" >> "$log"
+  if [[ -f "$(dirname "$0")/assert-empty-cwd" ]]; then
+    [[ -z "$(find "$PWD" -mindepth 1 -maxdepth 1 -print -quit)" ]]
+  fi
+  if [[ -f "$(dirname "$0")/version-descendant" ]]; then
+    (sleep 0.2; : > "$(dirname "$0")/version-descendant-survived") >/dev/null 2>&1 &
+  fi
+  if [[ -f "$(dirname "$0")/version-secret-failure" ]]; then
+    printf 'version-secret-stdout-should-not-escape\n'
+    printf 'version-secret-stderr-should-not-escape\n' >&2
+    exit 19
+  fi
+  if [[ -f "$(dirname "$0")/version-overflow" ]]; then
+    head -c 300000 /dev/zero
+    exit 0
+  fi
+  if [[ -f "$(dirname "$0")/version-stderr-overflow" ]]; then
+    head -c 300000 /dev/zero >&2
+    exit 0
+  fi
+  if [[ -f "$(dirname "$0")/version-state-file" ]]; then
+    head -c 300000 /dev/zero > "$PWD/non-output-state.bin"
+    wc -c < "$PWD/non-output-state.bin" | tr -d ' ' > "$(dirname "$0")/version-state-file-size"
+  fi
+  printf 'codex-cli 99.0.0-test\n'
+  exit 0
+fi
+printf 'unexpected diagnostic invocation\n' >&2
+exit 64
 FAKE
   chmod +x "$FAKE_CODEX"
 }
@@ -573,6 +632,182 @@ PY
   [[ ! -e "$SESSION/budget-metrics.json" ]]
 }
 
+@test "inspect-context reports contaminated structure without raw content or authentication" {
+  write_inspect_fake
+  : > "$FAKE_DIR/contaminated-context"
+
+  run python3 "$EXECUTOR" inspect-context --codex-bin "$FAKE_CODEX"
+  assert_success
+  assert_output --partial '"operation": "inspect-context"'
+  assert_output --partial '"classification": "skills_instructions"'
+  assert_output --partial '"raw_content_emitted": false'
+  assert_output --partial '"authentication_supplied": false'
+  assert_output --partial '"provider_subcommand_invoked": false'
+  assert_output --partial '"project_content_supplied": false'
+  assert_output --partial '"codex_cli_debug_subcommand_invoked": true'
+  refute_output --partial 'unrelated skill'
+  refute_output --partial 'not-a-real-secret'
+  run grep '^start ' "$FAKE_DIR/invocations.log"
+  assert_failure
+}
+
+@test "inspect-context hashes unknown prompt fields without emitting their names or values" {
+  write_inspect_fake
+  : > "$FAKE_DIR/extra-json-field"
+
+  run python3 "$EXECUTOR" inspect-context --codex-bin "$FAKE_CODEX"
+  assert_success
+  assert_output --partial '"unknown_key_count": 1'
+  assert_output --partial '"unknown_values": {'
+  refute_output --partial 'unexpected'
+  refute_output --partial 'hidden-diagnostic-value'
+}
+
+@test "inspect-context surfaces safe system-skill names as unapproved evidence" {
+  write_inspect_fake
+  : > "$FAKE_DIR/system-context"
+
+  run python3 "$EXECUTOR" inspect-context --codex-bin "$FAKE_CODEX"
+  assert_success
+  assert_output --partial '"system_tree_present": true'
+  assert_output --partial '"imagegen"'
+  assert_output --partial '"openai-docs"'
+  assert_output --partial '"skill-installer"'
+  refute_output --partial 'system skill fixture'
+}
+
+@test "inspect-context fingerprints secret-like unallowlisted system-skill names" {
+  write_inspect_fake
+  : > "$FAKE_DIR/system-context"
+  : > "$FAKE_DIR/secret-like-system-name"
+
+  # This satisfies the former broad safe-name shape; it is still never emitted.
+  run python3 - <<'PY'
+import re
+assert re.fullmatch(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", "sk_live_0123456789abcdef")
+PY
+  assert_success
+
+  run python3 "$EXECUTOR" inspect-context --codex-bin "$FAKE_CODEX"
+  assert_success
+  assert_output --partial '"unknown_name_count": 1'
+  assert_output --partial '"unknown_names_sha256": "'
+  refute_output --partial 'sk_live_0123456789abcdef'
+}
+
+@test "inspect-context uses disposable cwd and kills version descendants" {
+  write_inspect_fake
+  : > "$FAKE_DIR/version-descendant"
+  : > "$FAKE_DIR/assert-empty-cwd"
+
+  run python3 "$EXECUTOR" inspect-context --codex-bin "$FAKE_CODEX"
+  assert_success
+  sleep 0.3
+  [[ ! -e "$FAKE_DIR/version-descendant-survived" ]]
+  run python3 - "$FAKE_DIR/invocations.log" "$PROJECT_ROOT" <<'PY'
+import os, sys
+values = {}
+for line in open(sys.argv[1], encoding="utf-8"):
+    key, separator, value = line.rstrip("\n").partition("\t")
+    if separator and key in {"version-cwd", "probe-cwd"}:
+        values[key] = value
+assert set(values) == {"version-cwd", "probe-cwd"}
+assert values["version-cwd"] != values["probe-cwd"]
+for value in values.values():
+    assert not value.startswith(sys.argv[2] + os.sep)
+    assert not os.path.exists(value)
+print("OK")
+PY
+  assert_success
+  assert_output 'OK'
+}
+
+@test "inspect-context bounds captured version and prompt output while redacting failures" {
+  write_inspect_fake
+  : > "$FAKE_DIR/version-overflow"
+
+  run python3 "$EXECUTOR" inspect-context --codex-bin "$FAKE_CODEX"
+  [ "$status" -eq 2 ]
+  assert_output --partial 'Codex diagnostic version check failed'
+  [[ ${#output} -lt 4096 ]]
+
+  rm "$FAKE_DIR/version-overflow"
+  for marker in version-stderr-overflow prompt-overflow prompt-stderr-overflow; do
+    : > "$FAKE_DIR/$marker"
+    run python3 "$EXECUTOR" inspect-context --codex-bin "$FAKE_CODEX"
+    [ "$status" -eq 2 ]
+    if [[ "$marker" == version-* ]]; then
+      assert_output --partial 'Codex diagnostic version check failed'
+    else
+      assert_output --partial 'Codex prompt-context diagnostic failed'
+    fi
+    [[ ${#output} -lt 4096 ]]
+    rm "$FAKE_DIR/$marker"
+  done
+}
+
+@test "inspect-context does not limit non-output state files" {
+  write_inspect_fake
+  : > "$FAKE_DIR/version-state-file"
+
+  run python3 "$EXECUTOR" inspect-context --codex-bin "$FAKE_CODEX"
+  assert_success
+  assert_output --partial '"status": "inspected"'
+  run sed -n '1p' "$FAKE_DIR/version-state-file-size"
+  assert_success
+  assert_output '300000'
+}
+
+@test "inspect-context setup and capture failures do not leak temporary paths" {
+  run env EXECUTOR_PATH="$EXECUTOR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("executor", os.environ["EXECUTOR_PATH"])
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+for name, failure in (
+    ("setup", OSError("/private/tmp/spectra-codex-context-inspect-secret")),
+    ("capture", module.ExecutorError("/private/tmp/spectra-codex-context-capture-secret")),
+):
+    original = module.codex_environment if name == "setup" else module.capture_limited_process
+    if name == "setup":
+        module.codex_environment = lambda *_: (_ for _ in ()).throw(failure)
+    else:
+        module.capture_limited_process = lambda *_: (_ for _ in ()).throw(failure)
+    try:
+        try:
+            module.inspect_prompt_context(Path("/unused"))
+        except module.ExecutorError as exc:
+            assert str(exc) == "Codex prompt-context diagnostic failed"
+            assert "secret" not in str(exc)
+        else:
+            raise AssertionError("failure was not raised")
+    finally:
+        if name == "setup":
+            module.codex_environment = original
+        else:
+            module.capture_limited_process = original
+print("OK")
+PY
+  assert_success
+  assert_output 'OK'
+}
+
+@test "inspect-context never emits secret-bearing version stdout or stderr" {
+  write_inspect_fake
+  : > "$FAKE_DIR/version-secret-failure"
+
+  run python3 "$EXECUTOR" inspect-context --codex-bin "$FAKE_CODEX"
+  [ "$status" -eq 2 ]
+  assert_output --partial 'Codex diagnostic version check failed'
+  refute_output --partial 'version-secret-stdout-should-not-escape'
+  refute_output --partial 'version-secret-stderr-should-not-escape'
+}
+
 @test "preview binds isolated system skills independent of the disposable probe path" {
   write_good_fake
   : > "$FAKE_DIR/system-context"
@@ -689,6 +924,23 @@ PY
   assert_success
   sleep 0.3
   [[ ! -e "$FAKE_DIR/descendant-survived" ]]
+}
+
+@test "offline prompt probe kills descendants that keep inherited pipes open" {
+  write_good_fake
+  : > "$FAKE_DIR/system-context"
+  : > "$FAKE_DIR/descendant-inherits-pipes"
+  local started elapsed
+  started="$(date +%s)"
+
+  run python3 "$EXECUTOR" preview "$PLAN" \
+    --workspace-root "$WORKSPACE" --session-root "$SESSION" \
+    --codex-bin "$FAKE_CODEX" --codex-home "$CODEX_PROFILE"
+  assert_success
+  elapsed=$(( $(date +%s) - started ))
+  [[ "$elapsed" -lt 2 ]]
+  sleep 0.3
+  [[ ! -e "$FAKE_DIR/descendant-inherits-pipes-survived" ]]
 }
 
 @test "preview requires an explicit Codex home" {

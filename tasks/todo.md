@@ -277,3 +277,106 @@
   not proof of the exact provider request; closing that gap requires upstream Codex support.
 - Final read-only staff review found no blocking security or correctness issues after independently
   reproducing the directory-mode race check and confirming it now fails closed.
+
+## External-host offline preview gate
+
+### Plan
+
+- [x] Confirm the committed attestation-v2 branch and preserve the pre-existing Python cache.
+- [x] Create private synthetic workspace/session roots outside the repository.
+- [x] Create an owner-only temporary profile by hardlinking authentication without reading or
+  copying it, and remove that link immediately after preview.
+- [x] Launch exactly one `preview` from an environment-cleared Terminal shell outside the Codex
+  desktop process tree, using the standalone native binary; never invoke `execute`.
+- [x] Inspect only the preview result/status and verify whether host instructions are absent.
+- [x] Re-run focused verification if the result exposes a compatibility issue, then record the
+  external-host boundary and next approval gate.
+
+### Guardrails
+
+- Preview and its local version/context probes only; no model, worker, or provider request.
+- Synthetic `src/example.py` only; no repository source is staged or transmitted.
+- Never print, read, hash, or copy authentication contents.
+- Use explicit private temporary paths and remove only the temporary authentication hardlink.
+- A passing preview does not authorize execution; a one-worker smoke remains a separate approval.
+
+### Review
+
+- Directly opening a `.command` file in Terminal produced a separate Terminal process and ran the
+  preview-only script with an explicit synthetic workspace, placeholder model mapping, standalone
+  `0.147.0` binary, and dedicated minimal profile. The temporary authentication hardlink was removed
+  on both attempts; the source returned to one link with its original inode and owner-only mode.
+- The clean retry reached `debug prompt-input` and failed locally with status 2 before approval:
+  prompt item 0 contained current Codex metadata fields that attestation v2 does not accept. No
+  project content was transmitted, no budget artifact was created, and no provider process ran.
+- A second environment-cleared Terminal command rendered only the offline prompt and immediately
+  reduced it to non-secret structure, byte counts, and SHA-256 digests; the raw prompt was deleted.
+  The output still contained the same 2,264-byte and 271-byte unexpected developer messages seen
+  inside the desktop task, plus the skills/permissions, environment, and sentinel messages.
+- The external renderer also materialized a sixth `review-agent` system skill and added message
+  `id` plus `internal_chat_message_metadata_passthrough` fields. These are compatibility drift to
+  evaluate separately; accepting them would not remedy the two unexpected developer messages.
+- Launching Terminal with an empty environment and a separate process tree therefore does not
+  escape the injected context on this Mac. The evidence does not identify whether the remaining
+  source is host-wide runtime state, system configuration, or another integration boundary.
+- Stop here rather than weaken attestation or run a provider. The next decisive gate requires a
+  genuinely separate machine, VM, container, or CI runner. Parser metadata/system-skill updates
+  should follow clean-host evidence, not be inferred from this still-contaminated prompt.
+
+## Redacted prompt-context diagnostics
+
+### Staff-review blockers and fix plan
+
+- [x] Treat profile/debug compatibility checks as predictive, not an OS security boundary.
+- [x] Document and test same-user filesystem, keychain, and network capabilities.
+- [x] Keep live provider smoke blocked until clean runtime attestation and OS/container
+  read-isolation are available.
+
+### Plan
+
+- [x] Add an offline-only `inspect-context` operation that requires only an explicit Codex binary.
+- [x] Render in the same disposable environment as preview, terminate the probe process group, and
+  return only structural metadata, canonicalized sizes, and SHA-256 fingerprints.
+- [x] Never emit raw message text, raw envelope metadata, authentication data, project paths, or
+  system-skill contents; keep preview's production success policy unchanged.
+- [x] Surface fixed known system-skill names separately as unapproved diagnostic evidence.
+- [x] Expose the operation through the adapter and `spectra runtime codex` command surfaces.
+- [x] Cover redaction, unknown keys, contaminated messages, no-auth operation, and no-provider
+  behavior with fake-Codex tests.
+- [x] Compare two fresh offline diagnostic reports and record stable versus dynamic fields.
+- [x] Run focused/full verification and a final read-only security review before committing.
+
+### Guardrails
+
+- Diagnostic rendering only; no `exec`, approval token, budget mutation, or provider request.
+- Production preview/execute allowlists remain fail-closed and unchanged.
+- Unknown values and system-entry names are counted and hashed, never copied into diagnostic output.
+- Do not infer provenance or approve `review-agent` from its observed name alone.
+
+### Review
+
+- `inspect-context` is available through the executor, adapter, and `spectra runtime codex`. Spectra
+  supplies no authentication or project input and invokes only the local `--version` and
+  `debug prompt-input` subcommands; the report uses factual control fields rather than claiming an
+  operating-system security boundary.
+- Both probes start in disposable working directories with private HOME/XDG state. Parent-drained
+  pipes bound stdout and stderr independently, kill the complete process group on overflow or
+  timeout, and leave no child-visible capture files. A 300,000-byte non-output state-file test
+  proves output limiting does not change renderer filesystem behavior.
+- Redaction tests cover contaminated prompt text, unknown JSON fields, secret-shaped system-entry
+  names, secret-bearing version stdout/stderr, generic setup/capture errors, both-stream overflow,
+  and descendants with inherited pipes. Only the five fixed production system-skill names may be
+  shown; all other system entries are represented by a count and canonical-list hash.
+- Two fresh environment-cleared offline reports both contained five messages and the identical
+  content-boundary SHA-256 `abf7d6db5691dabe78fe1ade7d648d8ec0050fc174678fbd9af1481714fbac07`.
+  Envelope-metadata hashes differed as expected. Both reported two unknown system entries with the
+  stable hash `73a427cd5b0421286ea9c2eea4f661f8c69528ec1b052edf08baac392ba26377`,
+  emitted no raw content, and produced empty stderr.
+- Focused Codex/adapter/CLI/contract tests pass 64/64 and the complete repository suite passes
+  398/398. Markdown lint, ShellCheck, Python/JSON parsing, and diff hygiene pass.
+- Final read-only staff review found no blocking findings after independently confirming bounded
+  capture, descriptor cleanup, non-output state preservation, redaction, documentation accuracy,
+  and unchanged strict production attestation. No provider worker ran.
+- The stable content fingerprint still represents the contaminated host baseline and does not
+  approve it. A live smoke remains blocked pending evidence from a genuinely separate clean
+  machine, VM, container, or CI runner with the required OS-level read isolation.

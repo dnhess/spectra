@@ -16,6 +16,7 @@ import json
 import os
 import re
 import resource
+import selectors
 import shutil
 import signal
 import stat
@@ -346,7 +347,11 @@ def validate_scope(plan: dict[str, Any]) -> None:
             raise ExecutorError(f"action {action['id']} output is outside its declared write paths")
 
 
-def executable_info(raw: str, execution_profile: dict[str, Any]) -> dict[str, Any]:
+def executable_info(
+    raw: str,
+    execution_profile: dict[str, Any] | None = None,
+    redact_version: bool = False,
+) -> dict[str, Any]:
     requested = Path(raw)
     if not requested.is_absolute() or str(requested) != os.path.normpath(str(requested)):
         raise ExecutorError("--codex-bin must be a normalized absolute path")
@@ -359,25 +364,46 @@ def executable_info(raw: str, execution_profile: dict[str, Any]) -> dict[str, An
         raise ExecutorError("Codex executable is not executable")
     try:
         with tempfile.TemporaryDirectory(prefix="spectra-codex-probe-") as temporary:
+            probe_root = Path(temporary)
+            probe_cwd = probe_root / "cwd"
+            probe_cwd.mkdir(mode=0o700)
             operational_home = Path(temporary) / "codex-home"
-            materialize_codex_home(execution_profile, operational_home)
+            if execution_profile is None:
+                operational_home.mkdir(mode=0o700)
+            else:
+                materialize_codex_home(execution_profile, operational_home)
             env = codex_environment(
                 operational_home, Path(temporary) / "environment"
             )
-            completed = subprocess.run(
+            completed = capture_limited_process(
                 [str(resolved), "--version"],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=5,
-                check=False,
-                env=env,
+                env,
+                probe_cwd,
+                5.0,
+                MAX_PROMPT_CONTEXT_BYTES,
+                "Codex version check",
             )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.SubprocessError) as exc:
+        if redact_version:
+            raise ExecutorError("Codex diagnostic version check failed") from None
         raise ExecutorError(f"Codex version check failed: {exc}") from None
     if completed.returncode != 0:
+        if redact_version:
+            raise ExecutorError("Codex diagnostic version check failed")
         detail = completed.stderr[:1024].decode("utf-8", "replace").strip()
         raise ExecutorError(f"Codex version check exited {completed.returncode}: {detail}")
+    if redact_version:
+        binary_size, binary_hash = hash_file(resolved, MAX_CODEX_BINARY_BYTES)
+        return {
+            "requested_path": str(requested),
+            "resolved_path": str(resolved),
+            "version_descriptor": {
+                "stdout": diagnostic_bytes(completed.stdout),
+                "stderr": diagnostic_bytes(completed.stderr),
+            },
+            "size": binary_size,
+            "sha256": binary_hash,
+        }
     version = completed.stdout[:1024].decode("utf-8", "replace").strip()
     if not version or "\n" in version or "\r" in version:
         raise ExecutorError("Codex version check returned an invalid version string")
@@ -416,6 +442,97 @@ def codex_environment(codex_home: Path, private_root: Path) -> dict[str, str]:
     env.update({name: str(path) for name, path in locations.items()})
     env["CODEX_HOME"] = str(codex_home)
     return env
+
+
+def diagnostic_bytes(value: bytes) -> dict[str, Any]:
+    return {"bytes": len(value), "sha256": sha256_bytes(value)}
+
+
+def capture_limited_process(
+    arguments: list[str],
+    env: dict[str, str],
+    cwd: Path,
+    timeout: float,
+    limit: int,
+    label: str,
+) -> subprocess.CompletedProcess[bytes]:
+    """Drain child pipes in the parent, bounded per stream, and clean its process group."""
+    process: subprocess.Popen[bytes] | None = None
+    selector = selectors.DefaultSelector()
+    stdout = bytearray()
+    stderr = bytearray()
+    overflowed = False
+
+    def kill_group() -> None:
+        if process is None:
+            return
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+    try:
+        process = subprocess.Popen(
+            arguments,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            cwd=str(cwd),
+            start_new_session=True,
+        )
+        assert process.stdout is not None and process.stderr is not None
+        streams = ((process.stdout, stdout), (process.stderr, stderr))
+        for stream, _ in streams:
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ)
+        deadline = time.monotonic() + timeout
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                kill_group()
+                raise subprocess.TimeoutExpired(arguments, timeout)
+            # A child can inherit a pipe after its parent exits.  Polling keeps
+            # that case from extending this bounded probe to its full deadline.
+            if process.poll() is not None:
+                kill_group()
+            events = selector.select(min(remaining, 0.05))
+            for key, _ in events:
+                stream = key.fileobj
+                target = stdout if stream is process.stdout else stderr
+                try:
+                    chunk = os.read(stream.fileno(), 128 * 1024)
+                except BlockingIOError:
+                    continue
+                if not chunk:
+                    selector.unregister(stream)
+                    continue
+                if len(target) + len(chunk) > limit:
+                    overflowed = True
+                    kill_group()
+                    continue
+                target.extend(chunk)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            kill_group()
+            raise subprocess.TimeoutExpired(arguments, timeout)
+        process.wait(timeout=remaining)
+        if overflowed:
+            raise ExecutorError(f"{label} exceeded its output limit")
+        return subprocess.CompletedProcess(arguments, process.returncode, bytes(stdout), bytes(stderr))
+    finally:
+        selector.close()
+        # The parent may exit while leaving descendants in its process group.
+        kill_group()
+        if process is not None:
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
 
 
 def secure_system_skill_snapshot(
@@ -707,36 +824,231 @@ def validate_prompt_context(value: Any, codex_home: Path) -> dict[str, Any]:
 def run_prompt_context_probe(
     arguments: list[str],
     env: dict[str, str],
+    cwd: Path,
     timeout: float,
 ) -> subprocess.CompletedProcess[bytes]:
-    process = subprocess.Popen(
+    return capture_limited_process(
         arguments,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        start_new_session=True,
+        env,
+        cwd,
+        timeout,
+        MAX_PROMPT_CONTEXT_BYTES,
+        "Codex prompt-context probe",
     )
 
-    def terminate_group() -> None:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
 
+def diagnostic_fingerprint(value: Any) -> dict[str, Any]:
+    encoded = canonical_json(value)
+    return {
+        "json_type": (
+            "null" if value is None else
+            "boolean" if isinstance(value, bool) else
+            "number" if isinstance(value, (int, float)) else
+            "string" if isinstance(value, str) else
+            "array" if isinstance(value, list) else
+            "object" if isinstance(value, dict) else
+            "unknown"
+        ),
+        "bytes": len(encoded),
+        "sha256": sha256_bytes(encoded),
+    }
+
+
+def diagnostic_text(text: str, probe_root: Path) -> dict[str, Any]:
+    canonical = text
+    for candidate in sorted(
+        {str(probe_root), str(probe_root.resolve())},
+        key=len,
+        reverse=True,
+    ):
+        canonical = canonical.replace(candidate, "$PROBE_ROOT")
+    if text == PROMPT_CONTEXT_SENTINEL:
+        classification = "sentinel"
+    elif text.startswith("<skills_instructions>"):
+        classification = "skills_instructions"
+    elif text.startswith("<permissions instructions>"):
+        classification = "permissions_instructions"
+    elif text.startswith("<environment_context>"):
+        classification = "environment_context"
+    else:
+        classification = "other"
+    encoded = canonical.encode("utf-8")
+    return {
+        "classification": classification,
+        "bytes": len(text.encode("utf-8")),
+        "canonical_bytes": len(encoded),
+        "canonical_sha256": sha256_bytes(encoded),
+    }
+
+
+def diagnostic_skill_names(codex_home: Path) -> dict[str, Any]:
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptors: list[int] = []
     try:
-        try:
-            stdout, stderr = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            terminate_group()
-            process.communicate()
-            raise
-        terminate_group()
-        return subprocess.CompletedProcess(arguments, process.returncode, stdout, stderr)
+        home_fd = os.open(codex_home, directory_flags)
+        descriptors.append(home_fd)
+        skills_fd = os.open("skills", directory_flags, dir_fd=home_fd)
+        descriptors.append(skills_fd)
+        system_fd = os.open(".system", directory_flags, dir_fd=skills_fd)
+        descriptors.append(system_fd)
+        observed: list[str] = []
+        unknown: list[str] = []
+        for name in sorted(os.listdir(system_fd)):
+            info = os.stat(name, dir_fd=system_fd, follow_symlinks=False)
+            if stat.S_ISDIR(info.st_mode) and name in SYSTEM_SKILLS:
+                observed.append(name)
+            else:
+                unknown.append(name)
+        result = {
+            "system_tree_present": True,
+            "observed_safe_names": observed,
+            "unknown_name_count": len(unknown),
+            "unknown_names_sha256": (
+                sha256_bytes(canonical_json(unknown)) if unknown else None
+            ),
+        }
+    except OSError:
+        result = {
+            "system_tree_present": False,
+            "observed_safe_names": [],
+            "unknown_name_count": 0,
+            "unknown_names_sha256": None,
+        }
     finally:
-        if process.poll() is None:
-            terminate_group()
-            process.wait()
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+    return result
+
+
+def redact_prompt_context(value: Any, probe_root: Path, codex_home: Path) -> dict[str, Any]:
+    if not isinstance(value, list) or len(value) > 32:
+        raise ExecutorError("Codex prompt-context diagnostic returned an invalid message list")
+    envelope_keys = {
+        "type", "role", "content", "id",
+        "internal_chat_message_metadata_passthrough",
+    }
+    content_keys = {"type", "text"}
+    summaries: list[dict[str, Any]] = []
+    content_boundary: list[dict[str, Any]] = []
+    metadata_boundary: list[dict[str, Any]] = []
+    for index, value_item in enumerate(value):
+        if not isinstance(value_item, dict):
+            fingerprint = diagnostic_fingerprint(value_item)
+            summaries.append({"index": index, "shape": "non-object", "value": fingerprint})
+            content_boundary.append({"index": index, "shape": "non-object", "value": fingerprint})
+            continue
+        known = sorted(set(value_item) & envelope_keys)
+        unknown = {key: value_item[key] for key in value_item if key not in envelope_keys}
+        role = value_item.get("role")
+        message_type = value_item.get("type")
+        summary: dict[str, Any] = {
+            "index": index,
+            "shape": "object",
+            "known_keys": known,
+            "unknown_key_count": len(unknown),
+            "unknown_values": diagnostic_fingerprint(unknown) if unknown else None,
+            "role": role if role in {"developer", "user"} else "other",
+            "type": message_type if message_type == "message" else "other",
+        }
+        envelope_metadata = {
+            key: value_item[key]
+            for key in ("id", "internal_chat_message_metadata_passthrough")
+            if key in value_item
+        }
+        summary["envelope_metadata"] = (
+            diagnostic_fingerprint(envelope_metadata) if envelope_metadata else None
+        )
+        content_summaries: list[dict[str, Any]] = []
+        content = value_item.get("content")
+        if isinstance(content, list):
+            for content_index, candidate in enumerate(content):
+                if not isinstance(candidate, dict):
+                    content_summaries.append({
+                        "index": content_index,
+                        "shape": "non-object",
+                        "value": diagnostic_fingerprint(candidate),
+                    })
+                    continue
+                unknown_content = {
+                    key: candidate[key] for key in candidate if key not in content_keys
+                }
+                content_type = candidate.get("type")
+                content_summary: dict[str, Any] = {
+                    "index": content_index,
+                    "shape": "object",
+                    "known_keys": sorted(set(candidate) & content_keys),
+                    "unknown_key_count": len(unknown_content),
+                    "unknown_values": (
+                        diagnostic_fingerprint(unknown_content) if unknown_content else None
+                    ),
+                    "type": content_type if content_type == "input_text" else "other",
+                }
+                text_value = candidate.get("text")
+                content_summary["text"] = (
+                    diagnostic_text(text_value, probe_root)
+                    if isinstance(text_value, str)
+                    else None
+                )
+                content_summaries.append(content_summary)
+        else:
+            summary["content_value"] = diagnostic_fingerprint(content)
+        summary["content"] = content_summaries
+        summaries.append(summary)
+        content_boundary.append({
+            "index": index,
+            "role": summary["role"],
+            "type": summary["type"],
+            "content": content_summaries,
+        })
+        metadata_boundary.append({
+            "index": index,
+            "known_keys": known,
+            "unknown_values": summary["unknown_values"],
+            "envelope_metadata": summary["envelope_metadata"],
+        })
+    return {
+        "diagnostic_version": "redacted-prompt-context-v1",
+        "message_count": len(summaries),
+        "messages": summaries,
+        "content_boundary_sha256": sha256_bytes(canonical_json(content_boundary)),
+        "metadata_boundary_sha256": sha256_bytes(canonical_json(metadata_boundary)),
+        "system_skills": diagnostic_skill_names(codex_home),
+        "raw_content_emitted": False,
+    }
+
+
+def inspect_prompt_context(binary: Path, timeout: float = 5.0) -> dict[str, Any]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="spectra-codex-context-inspect-") as temporary:
+            root = Path(temporary)
+            codex_home = root / "codex-home"
+            stage = root / "stage"
+            codex_home.mkdir(mode=0o700)
+            stage.mkdir(mode=0o700)
+            env = codex_environment(codex_home, root / "environment")
+            arguments = [str(binary), "-C", str(stage)]
+            for feature in DISABLED_CODEX_FEATURES:
+                arguments.extend(["--disable", feature])
+            arguments.extend(["debug", "prompt-input", PROMPT_CONTEXT_SENTINEL])
+            completed = run_prompt_context_probe(
+                arguments,
+                env,
+                stage,
+                max(0.01, min(timeout, 5.0)),
+            )
+            if completed.returncode != 0:
+                raise ExecutorError(
+                    f"Codex prompt-context diagnostic exited {completed.returncode}"
+                )
+            if (
+                len(completed.stdout) > MAX_PROMPT_CONTEXT_BYTES
+                or len(completed.stderr) > MAX_PROMPT_CONTEXT_BYTES
+            ):
+                raise ExecutorError("Codex prompt-context diagnostic exceeded its output limit")
+            value = strict_json_bytes(completed.stdout, "Codex prompt-context diagnostic")
+            return redact_prompt_context(value, root, codex_home)
+    except (ExecutorError, OSError, subprocess.SubprocessError):
+        raise ExecutorError("Codex prompt-context diagnostic failed") from None
 
 
 def prompt_context_info(binary: Path, timeout: float = 5.0) -> dict[str, Any]:
@@ -755,6 +1067,7 @@ def prompt_context_info(binary: Path, timeout: float = 5.0) -> dict[str, Any]:
             completed = run_prompt_context_probe(
                 arguments,
                 env,
+                stage,
                 max(0.01, min(timeout, 5.0)),
             )
             if completed.returncode != 0:
@@ -1703,6 +2016,8 @@ async def execute_approved(context: dict[str, Any]) -> dict[str, Any]:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description="Approval-gated Spectra Codex Quick executor")
     commands = result.add_subparsers(dest="command", required=True)
+    inspect = commands.add_parser("inspect-context")
+    inspect.add_argument("--codex-bin", required=True)
     for name in ("preview", "execute"):
         command = commands.add_parser(name)
         command.add_argument("plan")
@@ -1724,6 +2039,28 @@ def emit(value: Any) -> None:
 def main(argv: list[str]) -> int:
     args = parser().parse_args(argv)
     try:
+        if args.command == "inspect-context":
+            try:
+                binary = executable_info(args.codex_bin, redact_version=True)
+            except (ExecutorError, OSError, subprocess.SubprocessError):
+                raise ExecutorError("Codex diagnostic version check failed") from None
+            report = inspect_prompt_context(Path(binary["resolved_path"]))
+            emit({
+                "version": VERSION,
+                "operation": "inspect-context",
+                "status": "inspected",
+                "codex": {
+                    "version_descriptor": binary["version_descriptor"],
+                    "size": binary["size"],
+                    "sha256": binary["sha256"],
+                },
+                "context": report,
+                "codex_cli_debug_subcommand_invoked": True,
+                "authentication_supplied": False,
+                "provider_subcommand_invoked": False,
+                "project_content_supplied": False,
+            })
+            return 0
         preview, context = build_preview(args)
         if args.command == "preview":
             emit(preview)

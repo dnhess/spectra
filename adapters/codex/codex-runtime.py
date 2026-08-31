@@ -177,7 +177,7 @@ def validate_plan(data):
 
 
 def capabilities():
-    return {"version": VERSION, "runtime": RUNTIME, "execution_enabled": True, "supported_operations": ["capabilities", "validate", "render", "dry-run", "preview", "execute", "doctor"], "capabilities": {"supports_background_workers": True, "supports_nested_workers": False, "supports_structured_output": True, "supports_resume": False, "supports_worktrees": False, "supports_network_control": False, "requires_explicit_execution_profile": True, "isolates_user_home": True, "max_parallelism": 2, "model_classes": ["economical", "standard", "frontier"]}}
+    return {"version": VERSION, "runtime": RUNTIME, "execution_enabled": True, "supported_operations": ["capabilities", "validate", "render", "dry-run", "inspect-context", "preview", "execute", "doctor"], "capabilities": {"supports_background_workers": True, "supports_nested_workers": False, "supports_structured_output": True, "supports_resume": False, "supports_worktrees": False, "supports_network_control": False, "requires_explicit_execution_profile": True, "isolates_user_home": True, "max_parallelism": 2, "model_classes": ["economical", "standard", "frontier"]}}
 
 
 def dry_run(plan):
@@ -218,7 +218,7 @@ def safe_write(path_arg, payload):
 
 
 def emit(data): json.dump(data, sys.stdout, indent=2, sort_keys=True); sys.stdout.write("\n")
-def usage(): return "usage: codex-runtime.py capabilities | validate <plan> | render <plan> | dry-run <plan> [--out ABSOLUTE_PATH] | preview <plan> --workspace-root ABS --session-root ABS --codex-bin ABS --codex-home ABS [--max-concurrency 1|2] | execute <plan> --workspace-root ABS --session-root ABS --codex-bin ABS --codex-home ABS --approve TOKEN [--max-concurrency 1|2] | doctor"
+def usage(): return "usage: codex-runtime.py capabilities | validate <plan> | render <plan> | dry-run <plan> [--out ABSOLUTE_PATH] | inspect-context --codex-bin ABS | preview <plan> --workspace-root ABS --session-root ABS --codex-bin ABS --codex-home ABS [--max-concurrency 1|2] | execute <plan> --workspace-root ABS --session-root ABS --codex-bin ABS --codex-home ABS --approve TOKEN [--max-concurrency 1|2] | doctor"
 
 
 def doctor():
@@ -254,7 +254,7 @@ def main(argv):
     try:
         if argv == ["capabilities"]: emit(capabilities()); return 0
         if argv == ["doctor"]: emit(doctor()); return 0
-        if argv and argv[0] in ("preview", "execute"):
+        if argv and argv[0] in ("inspect-context", "preview", "execute"):
             if sys.version_info < (3, 10):
                 raise ValidationError("executable Codex adapter requires Python 3.10+")
             regular_file = EXECUTOR_PATH.lstat()

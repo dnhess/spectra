@@ -103,6 +103,19 @@ SCRIPT
   assert_output --partial "--codex-home $TEST_TEMP/codex-home"
 }
 
+@test "runtime passes redacted context inspection to the adapter" {
+  bootstrap_installed_state
+  install_test_adapter
+
+  run "$SPECTRA_CLI" runtime codex inspect-context --codex-bin "$TEST_TEMP/codex"
+  assert_success
+  assert_output "adapter: inspect-context --codex-bin $TEST_TEMP/codex"
+
+  run "$SPECTRA_CLI" runtime codex inspect-context --codex-bin="$TEST_TEMP/codex"
+  assert_success
+  assert_output "adapter: inspect-context --codex-bin=$TEST_TEMP/codex"
+}
+
 @test "runtime resolves adapters from the dev repository" {
   bootstrap_installed_state
   local repo_dir="$TEST_TEMP/dev-repo"
@@ -127,6 +140,10 @@ SCRIPT
   run "$SPECTRA_CLI" runtime codex dry-run
   assert_failure
   assert_output --partial "Usage"
+
+  run "$SPECTRA_CLI" runtime codex inspect-context
+  assert_failure
+  assert_output --partial "--codex-bin"
 
   run "$SPECTRA_CLI" runtime codex doctor extra
   assert_failure

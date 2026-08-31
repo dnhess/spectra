@@ -56,6 +56,7 @@ codex-runtime.sh doctor
 codex-runtime.sh validate <plan.json>
 codex-runtime.sh render <plan.json>
 codex-runtime.sh dry-run <plan.json> [--out <result.json>]
+codex-runtime.sh inspect-context --codex-bin <absolute-path>
 codex-runtime.sh preview <plan.json> --workspace-root <absolute-path> \
   --session-root <absolute-path> --codex-bin <absolute-path> --codex-home <absolute-path> [--max-concurrency 1|2]
 codex-runtime.sh execute <plan.json> --workspace-root <absolute-path> \
@@ -72,6 +73,7 @@ spectra runtime codex doctor
 spectra runtime codex validate <plan.json>
 spectra runtime codex render <plan.json>
 spectra runtime codex dry-run <plan.json> [--out <result.json>]
+spectra runtime codex inspect-context --codex-bin <absolute-path>
 spectra runtime codex preview <plan.json> --workspace-root <absolute-path> \
   --session-root <absolute-path> --codex-bin <absolute-path> --codex-home <absolute-path>
 spectra runtime codex execute <plan.json> --workspace-root <absolute-path> \
@@ -82,6 +84,14 @@ spectra runtime codex execute <plan.json> --workspace-root <absolute-path> \
 `PATH` alone is not considered healthy. It never starts a model call. `dry-run`
 returns a normalized execution summary with `project_content_transmitted` set to
 `false`.
+
+`inspect-context` runs the isolated local prompt renderer using only the expected local
+`--version`/`debug prompt-input` subcommands. Spectra supplies no authentication or project
+inputs and invokes no provider subcommand. It emits only redacted structure, canonicalized sizes
+and hashes, envelope-metadata fingerprints, and fixed known system-skill names; all other names
+are counted and hashed rather than shown. It deliberately
+does not apply or weaken preview's semantic allowlist: an inspection can succeed while preview
+correctly rejects the same context.
 
 `preview` requires a dedicated authenticated Codex home and binds the plan, canonical roots, Codex executable and version, explicit
 model-class mapping, schema, persona prompts, declared input content hashes, and
@@ -102,7 +112,9 @@ Staging controls which project files Spectra puts in each worker's current
 directory. Codex's `read-only` sandbox prevents writes; it is not a filesystem
 read allowlist, so this slice does not claim protection from a malicious same-user
 worker reading other host-readable paths. Stronger confidentiality needs an
-OS/container permission profile. Executable commands require Python 3.10+.
+OS/container permission profile. The same-user binary retains host-readable filesystem,
+keychain, and network capabilities granted by the host; these controls rely on expected
+Codex debug semantics, not an OS security boundary. Executable commands require Python 3.10+.
 
 Earlier desktop testing with the ambient user profile added substantial unrelated
 skill context before the review input was considered. Preview and execute now require
@@ -131,6 +143,8 @@ The debug renderer and provider execution are separate Codex invocations. Spectr
 probe process group before snapshotting and narrows the race window with immediate rechecks, but
 this is predictive compatibility evidence rather than attestation of the exact provider request.
 Closing that final gap requires upstream Codex support for exact-invocation prompt attestation.
+Because the executable is same-user host code, these observations do not remove its host-level
+filesystem, keychain, or network capabilities.
 
 Workers use per-run private `HOME`, `CODEX_SQLITE_HOME`, `TMPDIR`, and XDG roots;
 caller-home and XDG-discovered files are not inherited. This closes the known personal
