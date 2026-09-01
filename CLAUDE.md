@@ -41,7 +41,7 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 - **Single JSONL writer**: Only the moderator writes to the event log. No writer handoff, no write ordering violations.
 - **Fresh agents per round**: Discussion/debate rounds spawn new agents rather than reusing previous ones. More expensive but guarantees delivery (avoids SendMessage failures).
 - **Scout agent per skill**: Every skill runs a Scout subagent (Phase 2.5) before main agents. The Scout gathers project and subject context into `context-brief.json`. Main agents read this file instead of redundantly re-gathering context, saving tokens at scale.
-- **No cost tracking**: Platform doesn't expose token counts. Budget ceiling and cost snapshots were removed as non-functional.
+- **Proxy budgets, not dollar accounting**: Platform token counts are unavailable, so Spectra enforces deterministic ceilings using observable proxies (agent spawns, model calls, rounds, output size, and elapsed time). The moderator records actual work with `budget-metrics.sh`; `budget-summary.json` and `spectra budget` provide local calibration. Do not claim exact token or dollar costs.
 - **No heartbeat monitoring**: No timer mechanism in Claude Code. Replaced by file-existence polling with timeouts.
 - **SQLite is scaffolded, not active**: `shared/tools/db-utils.sh` is complete and tested (24 tests), and SKILL.md Phase 6 documents the `db_execute` call, but the moderator does not yet execute it. JSONL manifests are the sole working storage layer. The SQLite infrastructure is retained for future use (cross-session analytics, `spectra stats`, cross-skill queries). Do not remove it — wire it in when a concrete query need emerges.
 
@@ -57,7 +57,7 @@ Multi-agent orchestration skills using a blackboard architecture. All agent coor
 
 - When modifying orchestration behavior, update `shared/orchestration.md` — both skills inherit from it.
 - When adding domain-specific events, add to the skill's own `event-schemas.md`, not to the shared base.
-- Never add coordinator, heartbeat, or cost tracking patterns — these were intentionally removed.
+- Never add coordinator, heartbeat, or fabricated token/dollar accounting patterns. Budget controls must use observable proxy metrics and remain moderator-owned.
 - Persona files are independent of the orchestration layer. Edit freely without touching SKILL.md.
 - The `spectra` CLI manages symlinks into `~/.claude/skills/`. When adding new skills, update `KNOWN_SKILLS` in `bin/spectra`.
 

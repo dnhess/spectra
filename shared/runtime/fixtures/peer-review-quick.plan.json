@@ -1,0 +1,183 @@
+{
+  "version": "0.1",
+  "session_id": "peer-review-quick-fixture",
+  "workflow": "peer-review",
+  "tier": "quick",
+  "phase": {
+    "id": "opening",
+    "join": {
+      "required_successes": 2,
+      "deadline_seconds": 120,
+      "on_timeout": "continue-if-quorum",
+      "cancel_remaining_on_quorum": false
+    }
+  },
+  "actions": [
+    {
+      "id": "review-design",
+      "action": "spawn",
+      "depends_on": [],
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": 0
+      },
+      "worker": {
+        "id": "design-critic",
+        "role": "reviewer",
+        "prompt_file": {
+          "root": "spectra",
+          "path": "peer-review/personas/design-critic.md"
+        },
+        "output_path": {
+          "root": "session",
+          "path": "opening/design-critic.json"
+        }
+      },
+      "execution": {
+        "model_class": "standard",
+        "max_turns": 1,
+        "background": true,
+        "permissions": {
+          "read_paths": [
+            {
+              "root": "workspace",
+              "path": "src"
+            },
+            {
+              "root": "spectra",
+              "path": "peer-review/personas/design-critic.md"
+            }
+          ],
+          "write_paths": [
+            {
+              "root": "session",
+              "path": "opening"
+            }
+          ],
+          "network": false
+        }
+      },
+      "completion": {
+        "kind": "artifact",
+        "path": {
+          "root": "session",
+          "path": "opening/design-critic.json"
+        },
+        "schema": "peer-review-opening-v1"
+      },
+      "budget": {
+        "add_agent_spawns": 1,
+        "add_model_calls": 1,
+        "phase": "opening"
+      }
+    },
+    {
+      "id": "review-reliability",
+      "action": "spawn",
+      "depends_on": [],
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": 0
+      },
+      "worker": {
+        "id": "reliability-engineer",
+        "role": "reviewer",
+        "prompt_file": {
+          "root": "spectra",
+          "path": "peer-review/personas/reliability-engineer.md"
+        },
+        "output_path": {
+          "root": "session",
+          "path": "opening/reliability-engineer.json"
+        }
+      },
+      "execution": {
+        "model_class": "standard",
+        "max_turns": 1,
+        "background": true,
+        "permissions": {
+          "read_paths": [
+            {
+              "root": "workspace",
+              "path": "src"
+            }
+          ],
+          "write_paths": [
+            {
+              "root": "session",
+              "path": "opening"
+            }
+          ],
+          "network": false
+        }
+      },
+      "completion": {
+        "kind": "artifact",
+        "path": {
+          "root": "session",
+          "path": "opening/reliability-engineer.json"
+        },
+        "schema": "peer-review-opening-v1"
+      },
+      "budget": {
+        "add_agent_spawns": 1,
+        "add_model_calls": 1,
+        "phase": "opening"
+      }
+    },
+    {
+      "id": "review-security",
+      "action": "spawn",
+      "depends_on": [],
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": 0
+      },
+      "worker": {
+        "id": "security-auditor",
+        "role": "reviewer",
+        "prompt_file": {
+          "root": "spectra",
+          "path": "peer-review/personas/security-auditor.md"
+        },
+        "output_path": {
+          "root": "session",
+          "path": "opening/security-auditor.json"
+        }
+      },
+      "execution": {
+        "model_class": "standard",
+        "max_turns": 1,
+        "background": true,
+        "permissions": {
+          "read_paths": [
+            {
+              "root": "workspace",
+              "path": "src"
+            }
+          ],
+          "write_paths": [
+            {
+              "root": "session",
+              "path": "opening"
+            }
+          ],
+          "network": false
+        }
+      },
+      "completion": {
+        "kind": "artifact",
+        "path": {
+          "root": "session",
+          "path": "opening/security-auditor.json"
+        },
+        "schema": "peer-review-opening-v1"
+      },
+      "budget": {
+        "add_agent_spawns": 1,
+        "add_model_calls": 1,
+        "phase": "opening"
+      }
+    }
+  ]
+}

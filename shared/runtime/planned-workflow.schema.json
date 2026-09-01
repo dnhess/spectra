@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spectra.dev/schemas/runtime/planned-workflow-0.1.json",
+  "title": "Spectra Planned Single-Phase DAG", "type": "object", "additionalProperties": false,
+  "required": ["version", "session_id", "workflow", "tier", "phase", "actions"],
+  "properties": {"version": {"const": "0.1"}, "session_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"}, "workflow": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"}, "tier": {"enum": ["quick", "standard", "deep"]}, "phase": {"$ref": "#/$defs/phase"}, "actions": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"$ref": "#/$defs/action"}}},
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+    "relativePath": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(/|$))[A-Za-z0-9][A-Za-z0-9._/-]*$"},
+    "anchoredPath": {"type": "object", "additionalProperties": false, "required": ["root", "path"], "properties": {"root": {"enum": ["workspace", "session", "spectra"]}, "path": {"$ref": "#/$defs/relativePath"}}},
+    "spectraPath": {"type": "object", "additionalProperties": false, "required": ["root", "path"], "properties": {"root": {"const": "spectra"}, "path": {"$ref": "#/$defs/relativePath"}}},
+    "sessionPath": {"type": "object", "additionalProperties": false, "required": ["root", "path"], "properties": {"root": {"const": "session"}, "path": {"$ref": "#/$defs/relativePath"}}},
+    "phase": {"type": "object", "additionalProperties": false, "required": ["id", "join"], "properties": {"id": {"$ref": "#/$defs/id"}, "join": {"type": "object", "additionalProperties": false, "required": ["required_successes", "deadline_seconds", "on_timeout", "cancel_remaining_on_quorum"], "properties": {"required_successes": {"type": "integer", "minimum": 1}, "deadline_seconds": {"type": "integer", "minimum": 1, "maximum": 86400}, "on_timeout": {"enum": ["continue-if-quorum", "fail"]}, "cancel_remaining_on_quorum": {"type": "boolean"}}}}},
+    "action": {"type": "object", "additionalProperties": false, "required": ["id", "action", "depends_on", "retry", "worker", "execution", "completion", "budget"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "action": {"const": "spawn"}, "depends_on": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+      "retry": {"type": "object", "additionalProperties": false, "required": ["max_attempts", "backoff_seconds"], "properties": {"max_attempts": {"type": "integer", "minimum": 1, "maximum": 5}, "backoff_seconds": {"type": "integer", "minimum": 0, "maximum": 3600}}},
+      "worker": {"type": "object", "additionalProperties": false, "required": ["id", "role", "prompt_file", "output_path"], "properties": {"id": {"$ref": "#/$defs/id"}, "role": {"$ref": "#/$defs/id"}, "prompt_file": {"$ref": "#/$defs/spectraPath"}, "output_path": {"$ref": "#/$defs/sessionPath"}}},
+      "execution": {"type": "object", "additionalProperties": false, "required": ["model_class", "max_turns", "background", "permissions"], "properties": {"model_class": {"enum": ["economical", "standard", "frontier"]}, "max_turns": {"type": "integer", "minimum": 1, "maximum": 100}, "background": {"type": "boolean"}, "permissions": {"type": "object", "additionalProperties": false, "required": ["read_paths", "write_paths", "network"], "properties": {"read_paths": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/anchoredPath"}}, "write_paths": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/anchoredPath"}}, "network": {"const": false}}}}},
+      "completion": {"type": "object", "additionalProperties": false, "required": ["kind", "path", "schema"], "properties": {"kind": {"const": "artifact"}, "path": {"$ref": "#/$defs/sessionPath"}, "schema": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}-v[0-9]+$"}}},
+      "budget": {"type": "object", "additionalProperties": false, "required": ["add_agent_spawns", "add_model_calls", "phase"], "properties": {"add_agent_spawns": {"const": 1}, "add_model_calls": {"const": 1}, "phase": {"$ref": "#/$defs/id"}}}
+    }}
+  }
+}

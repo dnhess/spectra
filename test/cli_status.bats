@@ -41,3 +41,11 @@ teardown() { _common_teardown; }
   assert_success
   assert_output --partial "shared"
 }
+
+@test "status includes all session-producing skills" {
+  bootstrap_installed_state
+  run "$SPECTRA_CLI" status
+  assert_success
+  assert_output --partial "trust-layer:"
+  assert_output --partial "coherence-monitor:"
+}

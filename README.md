@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Lint](https://github.com/dnhess/spectra/actions/workflows/lint.yml/badge.svg)](https://github.com/dnhess/spectra/actions/workflows/lint.yml)
 
-Multi-agent deliberation skills for Claude Code. Orchestrates structured review and debate sessions using a **blackboard architecture** — every perspective refracted, every angle examined.
+A local-first multi-agent deliberation runtime for structured review and debate using a **blackboard architecture** — every perspective refracted, every angle examined. Claude Code remains the default execution path; the provider-neutral runtime now also supports an opt-in, approval-gated Codex Quick peer-review opening phase.
 
 ## Available Skills
 
@@ -41,6 +41,9 @@ curl -fsSL https://raw.githubusercontent.com/dnhess/spectra/main/install.sh | ba
 This downloads the latest release to `~/.spectra/`, creates symlinks in
 `~/.claude/skills/`, and configures permissions automatically.
 
+The existing installer remains Claude Code-focused during the compatibility
+spike. The Codex adapter is additive and does not change Claude configuration.
+
 ### Developer setup
 
 For contributors working on Spectra itself:
@@ -56,8 +59,13 @@ spectra link .
 
 ```bash
 spectra status      # Show installation info
+spectra budget      # Show local proxy-budget calibration data
+spectra budget calibrate --json  # Review lower-only recommendations after enough completed runs
 spectra update      # Update to latest release
 spectra doctor      # Diagnose issues
+spectra runtime list # Show available runtime adapters
+spectra runtime codex capabilities # Inspect Codex planning and bounded execution support
+spectra runtime codex inspect-context --codex-bin /absolute/path/to/codex # Redacted offline prompt fingerprint
 spectra uninstall   # Remove Spectra
 ```
 
@@ -74,6 +82,9 @@ for development from source. Add to `~/.claude/settings.json`:
       "Bash(bash ~/.spectra/bin/json-write.sh *)",
       "Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)",
       "Bash(bash ~/.claude/skills/shared/tools/db-utils.sh *)",
+      "Bash(bash ~/.claude/skills/shared/tools/budget-policy.sh *)",
+      "Bash(bash ~/.claude/skills/shared/tools/budget-metrics.sh *)",
+      "Bash(bash ~/.claude/skills/shared/tools/budget-report.sh *)",
       "Write(~/.spectra/sessions/**)",
       "Read(~/.spectra/sessions/**)",
       "Glob(~/.spectra/sessions/**)",
@@ -94,7 +105,7 @@ Agents ──(Write JSON file)──► Session Directory ◄──(Glob/Read)�
 ```
 
 - **Agents** write structured JSON files to session subdirectories
-- **Moderator** (main Claude instance) polls for files, reads results, writes the JSONL event log
+- **Moderator** (the active host agent) polls for files, reads results, writes the JSONL event log
 - **No SendMessage** for data exchange — files are the communication medium
 - **No coordinator agent** — the moderator drives the session directly
 
@@ -105,11 +116,37 @@ Additional infrastructure:
 - **Scout agent** — every skill runs a pre-session Scout subagent (Phase 2.5) that writes `context-brief.json` to the session directory. Main agents read this file for project/subject context instead of re-gathering it independently, saving tokens at scale.
 - **Output validation** — 5-stage pipeline (size, JSON parse, schema, content sanitize, accept) validates all agent output before event log writes
 - **SQLite storage** (scaffolded, not yet wired) — hybrid storage layer alongside JSONL manifests for cross-session metadata queries. Schema, utilities, and tests exist but sessions do not yet populate the database. JSONL manifests are the active storage layer.
-- **Context budget monitoring** — proxy metrics tracked at every phase transition with emergency shutdown when context pressure is critical
+- **Enforced session budgets** — a dry-run estimate is shown before execution, then observable proxy metrics enforce agent, model-call, round, output, and wall-time ceilings while reserving capacity for final synthesis and required verification
+- **Local budget calibration** — `spectra budget [--skill NAME] [--limit N] [--json]` summarizes
+  active, completed, interrupted, and legacy sessions without activating SQLite or claiming exact
+  token/dollar costs. Moderator-owned counters use torn-write-safe atomic replacement through
+  `budget-metrics.sh`, including explicit finalization-call accounting; updates must remain
+  serialized through the sole moderator. `spectra budget calibrate` uses only finalized,
+  Full-quality completed summaries, requires at least 20 matching runs across seven days, and
+  produces lower-only recommendations for manual review without editing policy.
 - **Quality KPIs** — per-session metrics (completion rate, convergence, specialist utilization, etc.) computed at session end (SQLite population pending)
 - **Skill composition** — skills can invoke other skills mid-session (e.g., deep-design invokes decision-board to resolve a deadlocked topic)
 - **Round summarization** — moderator produces condensed ~1000-token round briefs between discussion rounds, replacing raw position injection and reducing token growth from O(agents^2 x rounds^2) to O(agents x rounds)
-- **Tier-based model allocation** — each skill defines per-tier model tables (opus for analysis-heavy opening phases, sonnet for discussion/synthesis)
+- **Tier-based model allocation** — routine scout, research, discussion, and reduction work uses cheaper models; frontier models are reserved for high-value synthesis or arbitration and require approval when configured
+- **Runtime adapter contract** — versioned graph, capability, logical-path, quorum, timeout,
+  retry, and budget metadata separates portable workflow intent from host-specific agent APIs.
+  The Codex adapter validates, renders, diagnoses, and dry-runs without invoking a model. Its
+  opt-in Quick peer-review executor stages only declared inputs, requires a digest-bound approval,
+  caps concurrency at two, validates structured artifacts, and serializes budget writes. Approved
+  execution sends staged inputs to the configured Codex model service; orchestration and artifacts
+  stay local. Workers now require a dedicated authenticated Codex profile and per-run isolated
+  homes. A one-worker synthetic smoke completed, but offline prompt rendering subsequently proved
+  that the desktop runtime injected bundled skills and unrelated orchestration instructions. The
+  executor now rejects such a runtime before approval and before every provider spawn. Execution
+  remains experimental pending a clean runtime attestation and stronger OS read isolation. See
+  [`docs/runtime-adapters.md`](docs/runtime-adapters.md).
+
+  An available but dormant manual clean-host diagnostic is
+  `.github/workflows/codex-clean-host-inspect.yml`: pinned Codex package version/native SHA,
+  Linux/amd64 GitHub-hosted network-disabled read-only container, sanitized host-bounded
+  evidence, no authentication/project/model/provider inputs, and a redacted evidence-only
+  report. It has not been run and cannot authorize execution. Docker daemon/kernel and
+  container-escape, diagnostic-evasion, exact-request, and OS read-isolation limits remain.
 
 ## Context Persistence
 
@@ -119,6 +156,8 @@ Sessions leave a trail for future sessions to build on:
   Enables recovery after Claude Code context compaction mid-session.
 - **Handoffs** — `handoff.md` written at session end with key findings,
   unresolved items, and follow-up recommendations.
+- **Budget summaries** — `budget-summary.json` records planned versus observed proxy usage,
+  threshold pressure, blocked expansions, overshoots, and finalization-reserve use.
 - **Prior Context** — At session start, the moderator queries the manifest
   for prior sessions on the same project and loads the most recent handoff.
   Agents receive unresolved items so they don't repeat resolved findings.
@@ -145,8 +184,19 @@ spectra/
     tools/
       jsonl-utils.sh            # JSONL query utility
       db-utils.sh               # SQLite database utilities (WAL mode)
+      budget-policy.sh          # Session budget defaults, estimates, and checks
+      budget-policy.py          # Dependency-free budget policy engine
+      budget-metrics.sh         # Scoped serialized observed-usage updater
+      budget-metrics.py         # Dependency-free metrics update engine
+      budget-report.sh          # Scoped session summary/report wrapper
+      budget-report.py          # Local proxy-budget calibration reports
       validate-output.sh        # 5-stage output validation pipeline
-    schemas/                    # JSON validation schemas for agent outputs
+    schemas/
+      budget-policies.json      # Per-skill and per-tier budget policy matrix
+      ...                       # JSON validation schemas for agent outputs
+    runtime/                    # Provider-neutral runtime schemas and fixtures
+  adapters/
+    codex/                      # Local-only Codex planning adapter
   deep-design/                  # Design review skill
     SKILL.md                    # Domain orchestration
     event-schemas.md            # Domain-specific event types
