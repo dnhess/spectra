@@ -439,7 +439,7 @@
 - [x] Add a regression check that forbids the `runner` context in `jobs.<job_id>.env`.
 - [x] Preserve the manual-only, no-secret, no-provider, and sanitized-artifact boundaries.
 - [x] Run focused and complete inert verification plus final read-only review.
-- [ ] Publish a focused bugfix PR; do not dispatch the workflow or create a release in this change.
+- [x] Publish a focused bugfix PR; do not dispatch the workflow or create a release in this change.
 
 ### Evidence
 
