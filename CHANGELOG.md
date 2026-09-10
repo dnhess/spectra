@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Moderator join is file polling of `opening/*.json`, not waiting on host chat or subagent-completion messages
 - Project positioning now treats Claude Code as the current default adapter rather than the
   permanent orchestration boundary
 - Investigation of the synthetic Codex smoke found model-visible bundled skills and unrelated

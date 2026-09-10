@@ -84,6 +84,13 @@ PY
   done
 }
 
+@test "protocol tells the moderator to poll opening files not chat" {
+  run grep -E "poll the filesystem|Do not wait on host chat" "$PROJECT_ROOT/plugin/skills/spectra/references/protocol.md" "$PROJECT_ROOT/plugin/skills/spectra/SKILL.md"
+  assert_success
+  assert_output --partial "poll the filesystem"
+  assert_output --partial "Do not wait on host chat"
+}
+
 @test "decision-board example synthesis JSON is valid" {
   run python3 - "$PROJECT_ROOT/plugin/skills/spectra/references/examples/decision-board-quick.json" <<'PY'
 import json, sys

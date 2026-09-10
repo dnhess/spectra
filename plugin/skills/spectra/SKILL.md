@@ -22,14 +22,15 @@ Workflows: `deep-design`, `decision-board`, `peer-review`, `trust-layer`, `coher
 ## Run
 
 1. Confirm workflow, tier, and subject if missing.
-2. Spawn **one subagent per core persona in parallel**. Wait for all of them.
+2. Spawn **one subagent per core persona in parallel**.
    Use the worker prompt in [references/protocol.md](references/protocol.md).
    - Each worker gets only its persona brief and the subject
    - Each writes one JSON file to `<session>/opening/<persona-id>.json`
    - Workers must not read each other's files or edit the user's project (`peer-review` may read diffs)
-3. Drop invalid JSON rather than guessing.
-4. Write a short `discussion/round-1/round-brief.json`. Quick tier: no extra debate round unless two personas deadlock.
-5. Synthesize on this thread. Write `synthesis-brief.json` and `handoff.md`.
-6. Show the verdict. Do not apply code changes unless the user explicitly asks after the verdict.
+3. **Do not wait on host chat, callbacks, or “subagent finished” messages.** Join by polling `<session>/opening/<persona-id>.json` until every expected file exists and parses, or until the phase deadline. Then read the files yourself.
+4. Drop invalid JSON rather than guessing.
+5. Write a short `discussion/round-1/round-brief.json`. Quick tier: no extra debate round unless two personas deadlock.
+6. Synthesize on this thread. Write `synthesis-brief.json` and `handoff.md`.
+7. Show the verdict. Do not apply code changes unless the user explicitly asks after the verdict.
 
 If this host cannot spawn subagents, say so and stop. Do not fake a panel by role-playing every persona yourself.

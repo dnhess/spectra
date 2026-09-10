@@ -6,6 +6,10 @@ Coordination is a **typed artifact ledger**, not chat:
 - You are the only writer of `synthesis-brief.json`, `handoff.md`, and round briefs.
 - Agent output files are write-once. First valid file wins.
 
+## Join rule
+
+After spawn, **poll the filesystem**. Completeness is “every expected `opening/<persona-id>.json` exists and parses,” not a chat callback, tool result, or “all subagents finished” notice. Hosts drop those notices. If a file is missing past the deadline, record that persona as timed out and synthesize with whoever landed.
+
 ## Session layout
 
 ```text
