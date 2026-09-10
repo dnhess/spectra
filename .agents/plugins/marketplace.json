@@ -1,0 +1,14 @@
+{
+  "name": "spectra",
+  "plugins": [
+    {
+      "name": "spectra",
+      "source": {
+        "path": "./plugin"
+      },
+      "interface": {
+        "displayName": "Spectra"
+      }
+    }
+  ]
+}

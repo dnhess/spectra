@@ -3,7 +3,33 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Lint](https://github.com/dnhess/spectra/actions/workflows/lint.yml/badge.svg)](https://github.com/dnhess/spectra/actions/workflows/lint.yml)
 
-A local-first multi-agent deliberation runtime for structured review and debate using a **blackboard architecture** — every perspective refracted, every angle examined. Claude Code remains the default execution path; the provider-neutral runtime now also supports an opt-in, approval-gated Codex Quick peer-review opening phase.
+A local-first multi-agent deliberation runtime. One portable plugin. The host
+agent is the moderator; specialist subagents write a typed artifact ledger.
+
+## Install (this is the whole thing)
+
+### Claude Code
+
+```text
+/plugin marketplace add dnhess/spectra
+/plugin install spectra@spectra
+```
+
+Then: `Use Spectra to debate whether we require MFA.`
+
+### Codex / Astra / ChatGPT
+
+If this repo is the workspace, enable the Spectra plugin from the local
+marketplace (`.agents/plugins/marketplace.json`). Or copy
+`plugin/skills/spectra` to `~/.agents/skills/spectra` and restart Codex.
+
+Then: `$spectra debate whether we require MFA.`
+
+No `spectra` CLI. No curl installer. The package is `plugin/` — one Agent
+Skill plus Claude and Codex manifests.
+
+The old `install.sh` / `~/.claude/skills` path still exists for maintainers
+of the original five fat Claude skills.
 
 ## Available Skills
 
@@ -34,15 +60,14 @@ Triggers: long-running agent checkpoints, mid-session drift detection, auditing 
 
 ## Installation
 
+Prefer the plugin commands in **Install** above. Maintainer CLI:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dnhess/spectra/main/install.sh | bash
 ```
 
-This downloads the latest release to `~/.spectra/`, creates symlinks in
-`~/.claude/skills/`, and configures permissions automatically.
-
-The existing installer remains Claude Code-focused during the compatibility
-spike. The Codex adapter is additive and does not change Claude configuration.
+That path is only for the original Claude Code skill tree under
+`~/.claude/skills/`.
 
 ### Developer setup
 
@@ -58,6 +83,8 @@ spectra link .
 ### Management
 
 ```bash
+spectra how         # How to run a session on Claude vs Astra/Codex/Hermes
+spectra run <skill> # Prepare a Claude-hosted session directory and print the prompt
 spectra status      # Show installation info
 spectra budget      # Show local proxy-budget calibration data
 spectra budget calibrate --json  # Review lower-only recommendations after enough completed runs
