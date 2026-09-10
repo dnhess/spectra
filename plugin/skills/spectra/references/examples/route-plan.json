@@ -1,0 +1,21 @@
+{
+  "class": "frontier",
+  "goal": "Add a README section without melting the frontier quota",
+  "steps": [
+    {
+      "id": "scout",
+      "class": "economical",
+      "goal": "List existing README headings and where a Governor section would fit"
+    },
+    {
+      "id": "draft",
+      "class": "standard",
+      "goal": "Draft the section in workers/draft.json as markdown"
+    },
+    {
+      "id": "merge",
+      "class": "frontier",
+      "goal": "Approve wording and apply the edit on this thread"
+    }
+  ]
+}

@@ -2,5 +2,5 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "spectra",
   "version": "0.3.0",
-  "description": "Multi-agent deliberation for design review, decision debate, peer review, trust, and coherence audit."
+  "description": "Govern frontier sessions: cheap subagents for grunt work, approval for frontier calls."
 }

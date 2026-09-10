@@ -51,12 +51,14 @@ PY
 
 @test "portable skill frontmatter matches Agent Skills name rules" {
   run python3 - "$PROJECT_ROOT/plugin/skills/spectra/SKILL.md" <<'PY'
-import re, sys
+import sys
 from pathlib import Path
 text = Path(sys.argv[1]).read_text()
 fm = text.split("---", 2)[1]
 assert "name: spectra" in fm
 assert "description:" in fm
+low = fm.lower()
+assert "frontier" in low or "subagent" in low or "token" in low
 print("ok")
 PY
   assert_success
@@ -89,6 +91,29 @@ PY
   assert_success
   assert_output --partial "poll the filesystem"
   assert_output --partial "Do not wait on host chat"
+}
+
+@test "governor skill routes economical vs frontier and requires approval" {
+  skill="$PROJECT_ROOT/plugin/skills/spectra/SKILL.md"
+  proto="$PROJECT_ROOT/plugin/skills/spectra/references/protocol.md"
+  grep -q "economical" "$skill" "$proto"
+  grep -q "frontier" "$skill"
+  grep -q "approval" "$skill"
+}
+
+@test "route-plan example JSON is valid" {
+  run python3 - "$PROJECT_ROOT/plugin/skills/spectra/references/examples/route-plan.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+assert data["class"] in ("economical", "standard", "frontier")
+assert "steps" in data and len(data["steps"]) >= 1
+for step in data["steps"]:
+    assert step["class"] in ("economical", "standard", "frontier")
+    assert "id" in step and "goal" in step
+print("ok")
+PY
+  assert_success
 }
 
 @test "decision-board example synthesis JSON is valid" {

@@ -1,46 +1,44 @@
-# Spectra protocol
+# Spectra governor protocol
 
-Coordination is a **typed artifact ledger**, not chat:
+The host thread is expensive. Workers are cheap. Files are the join signal.
 
-- Workers write JSON files. You read files. Nobody messages workers as a bus.
-- You are the only writer of `synthesis-brief.json`, `handoff.md`, and round briefs.
-- Agent output files are write-once. First valid file wins.
+## Classes
+
+- **economical** — search, read, summarize, tests, boilerplate. Must be a subagent. Smallest/fastest model the host offers.
+- **standard** — bounded implementation or review. Subagent. Mid-tier if available, else economical.
+- **frontier** — plan, architecture, conflict, final merge of disagreeing workers. This thread only, after user approval.
+
+Default: if unsure, `economical`. Never upgrade a step to `frontier` without asking.
+
+## Caps (proxy, not dollars)
+
+Do not claim token or dollar cost. Enforce observable ceilings:
+
+- max 8 worker spawns per session unless the user raises it
+- max 2 concurrent workers
+- max 15 minutes wall for a worker wave
+- no extra wave if `summary.json` can be written from what landed
+
+Record `{spawns, frontier_calls, skipped}` in `summary.json`.
 
 ## Join rule
 
-After spawn, **poll the filesystem**. Completeness is “every expected `opening/<persona-id>.json` exists and parses,” not a chat callback, tool result, or “all subagents finished” notice. Hosts drop those notices. If a file is missing past the deadline, record that persona as timed out and synthesize with whoever landed.
+After spawn, **poll the filesystem**. Completeness is “every expected `workers/<id>.json` exists and parses,” not a chat callback, tool result, or “all subagents finished” notice. Hosts drop those notices. If a file is missing past the deadline, mark that step `timed_out` and continue.
 
-## Session layout
+**Do not wait on host chat.**
 
-```text
-~/.spectra/sessions/<workflow>/<topic>-<timestamp>/
-  opening/<persona-id>.json
-  discussion/round-1/round-brief.json
-  synthesis-brief.json
-  handoff.md
-```
-
-## Worker prompt (paste into each subagent)
+## Worker prompt
 
 ```text
-You are the <persona-id> persona. Read only the persona brief I give you and the subject.
-Write one JSON object to <absolute-opening-path>. Do not read other agents' files.
-Do not edit the user's project. No markdown fences around the file contents.
-Use the opening schema for this workflow. Stop after the file is written.
+You are a Spectra economical worker. Goal: <goal>
+Write one JSON object to <absolute-path>: {id, ok, notes, artifacts}.
+Do not read other workers' files. Do not call a frontier model. Stop after the file is written.
 ```
 
-## Opening JSON
+## plan.json
 
-Decision-board: `agent`, `preferred_option`, `confidence` (0-1), `conditions` (array), `reasoning`, `options_assessed` (array).
+See [examples/route-plan.json](examples/route-plan.json).
 
-Deep-design / peer-review: `agent`, `findings` (array of `{severity, title, evidence}`), `recommendation`.
+## Deliberation (opt-in)
 
-Trust-layer / coherence-monitor: `agent`, `verdict` (`accept`|`reject`|`revise`), `findings` (array), `reasoning`.
-
-## Synthesis
-
-`synthesis-brief.json` must include `workflow`, `recommendation`, `dissent`, `conditions`, `persona_count`.
-
-`handoff.md` must include Session, Key Findings, Unresolved, Recommendations.
-
-See [examples/decision-board-quick.json](examples/decision-board-quick.json) for shape.
+Only if the user asks for Spectra decision-board / deep-design / trust-layer. Then use [personas.md](personas.md) and write openings under `opening/`. Same join rule on those files. Do not use a persona panel to save tokens — it spends them.

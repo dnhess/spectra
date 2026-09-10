@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "spectra",
-  "description": "Spectra multi-agent deliberation plugins",
+  "description": "Spectra governor plugin",
   "owner": {
     "name": "Dillon Hess",
     "url": "https://github.com/dnhess"
@@ -10,7 +10,7 @@
     {
       "name": "spectra",
       "source": "./plugin",
-      "description": "One portable Spectra skill for design review, decisions, peer review, trust, and coherence.",
+      "description": "Governor skill: cheap subagents for grunt work, approval for frontier calls.",
       "version": "0.3.0"
     }
   ]

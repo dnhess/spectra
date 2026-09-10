@@ -3,8 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Lint](https://github.com/dnhess/spectra/actions/workflows/lint.yml/badge.svg)](https://github.com/dnhess/spectra/actions/workflows/lint.yml)
 
-A local-first multi-agent deliberation runtime. One portable plugin. The host
-agent is the moderator; specialist subagents write a typed artifact ledger.
+A local-first **governor** for frontier agents. The host (Astra, Fable, Claude)
+stays on the expensive thread; Spectra routes scout and grunt work to cheap
+subagents and asks before any frontier call.
 
 ## Install (this is the whole thing)
 
@@ -15,7 +16,7 @@ agent is the moderator; specialist subagents write a typed artifact ledger.
 /plugin install spectra@spectra
 ```
 
-Then: `Use Spectra to debate whether we require MFA.`
+Then: `Use Spectra to keep Astra from doing the grep itself.`
 
 ### Codex / Astra / ChatGPT
 
@@ -23,7 +24,7 @@ If this repo is the workspace, enable the Spectra plugin from the local
 marketplace (`.agents/plugins/marketplace.json`). Or copy
 `plugin/skills/spectra` to `~/.agents/skills/spectra` and restart Codex.
 
-Then: `$spectra debate whether we require MFA.`
+Then: `$spectra split this task — cheap workers, ask before frontier.`
 
 No `spectra` CLI. No curl installer. The package is `plugin/` — one Agent
 Skill plus Claude and Codex manifests.

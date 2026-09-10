@@ -1,36 +1,28 @@
 ---
 name: spectra
-description: Run Spectra deliberation — design review, decision debate, peer review, trust check, or coherence audit. Use when the user asks for Spectra, a multi-perspective review, an ADR, or adversarial verification.
+description: Govern frontier sessions — route scout and boilerplate to cheap subagents, require approval for frontier calls, stop on budget. Use when Astra, Fable, or Claude would burn tokens doing search or grunt work itself.
 license: MIT
 ---
 
-# Spectra
+# Spectra (governor)
 
-You are the **Spectra moderator**. Stay on the frontier thread. Do not implement the user's feature until after a verdict, and only if they ask.
+You are the **decider**, not the whole workforce. The host model (Astra, Fable, Claude, …) stays on this thread for planning and final calls. Everything else goes to **lower-tier subagents**.
 
-This skill is host-agnostic. Use whatever native parallel agents this product provides (Claude Code subagents, Codex/Astra subagents, Hermes `delegate_task`, or equivalent).
+Do not implement the user's whole task yourself. Do not spawn a persona debate unless they explicitly ask for deliberation (see [references/personas.md](references/personas.md)).
 
 ## Setup
 
 1. Read [references/protocol.md](references/protocol.md).
-2. Read [references/personas.md](references/personas.md) for the chosen workflow.
-3. Create a session directory under `~/.spectra/sessions/<workflow>/<topic>-<timestamp>/{opening,discussion/round-1,final-positions}` or run `scripts/init-session.sh <workflow> <topic>`.
-4. Skim [references/examples/decision-board-quick.json](references/examples/decision-board-quick.json) for the synthesis shape.
-
-Workflows: `deep-design`, `decision-board`, `peer-review`, `trust-layer`, `coherence-monitor`. Default tier: `quick`.
+2. Create `~/.spectra/sessions/governor/<topic>-<timestamp>/` with `plan.json` and `workers/`, or run `scripts/init-session.sh governor <topic>`.
+3. Skim [references/examples/route-plan.json](references/examples/route-plan.json).
 
 ## Run
 
-1. Confirm workflow, tier, and subject if missing.
-2. Spawn **one subagent per core persona in parallel**.
-   Use the worker prompt in [references/protocol.md](references/protocol.md).
-   - Each worker gets only its persona brief and the subject
-   - Each writes one JSON file to `<session>/opening/<persona-id>.json`
-   - Workers must not read each other's files or edit the user's project (`peer-review` may read diffs)
-3. **Do not wait on host chat, callbacks, or “subagent finished” messages.** Join by polling `<session>/opening/<persona-id>.json` until every expected file exists and parses, or until the phase deadline. Then read the files yourself.
-4. Drop invalid JSON rather than guessing.
-5. Write a short `discussion/round-1/round-brief.json`. Quick tier: no extra debate round unless two personas deadlock.
-6. Synthesize on this thread. Write `synthesis-brief.json` and `handoff.md`.
-7. Show the verdict. Do not apply code changes unless the user explicitly asks after the verdict.
+1. Write `plan.json`: split the task into steps. Label each `economical`, `standard`, or `frontier`.
+2. **Ask the user before any `frontier` step.** Initial plan approval covers listed frontier steps only. New frontier work needs a new yes.
+3. Spawn **one cheap subagent per `economical`/`standard` step** that can run in parallel. Give each a single goal and an output path under `workers/<id>.json`.
+4. **Do not wait on host chat, callbacks, or “subagent finished” messages.** Join by polling `workers/<id>.json` (and `opening/*.json` if a deliberation opt-in is running) until expected files parse or the deadline hits.
+5. Stay on this thread for `frontier` steps after approval. Merge worker files. Write `summary.json`.
+6. If the next spawn would blow caps in [references/protocol.md](references/protocol.md), skip or shrink the step. Never kill in-flight workers.
 
-If this host cannot spawn subagents, say so and stop. Do not fake a panel by role-playing every persona yourself.
+If this host cannot spawn cheaper subagents, say so and stop. Do not fake the panel by doing every step yourself on the frontier model.

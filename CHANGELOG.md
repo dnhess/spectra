@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Portable plugin is a governor: route economical/standard work to cheap subagents, require approval for frontier, keep deliberation opt-in
 - Moderator join is file polling of `opening/*.json`, not waiting on host chat or subagent-completion messages
 - Project positioning now treats Claude Code as the current default adapter rather than the
   permanent orchestration boundary
