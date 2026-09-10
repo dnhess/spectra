@@ -77,6 +77,8 @@ PY
   [[ -d "$session_dir/opening" ]]
   [[ -d "$session_dir/discussion/round-1" ]]
   [[ -d "$session_dir/final-positions" ]]
+  [[ -d "$session_dir/workers" ]]
+  [[ -f "$session_dir/plan.json" ]]
 }
 
 @test "personas.md names every Quick core persona" {
@@ -100,6 +102,18 @@ PY
   grep -q "frontier" "$skill"
   grep -q "approval" "$skill"
   grep -q 'escalate' "$skill" "$proto"
+}
+
+@test "worker example JSON includes escalate" {
+  run python3 - "$PROJECT_ROOT/plugin/skills/spectra/references/examples/worker.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+assert "id" in data and "ok" in data and "escalate" in data
+assert data["escalate"] in ("", "frontier")
+print("ok")
+PY
+  assert_success
 }
 
 @test "route-plan example JSON is valid" {

@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Portable plugin is a governor: route economical/standard work to cheap subagents, require approval for frontier, keep deliberation opt-in. Workers escalate via `escalate: "frontier"` in their JSON, not by chatting with the governor
+- Portable plugin is a governor: route economical/standard work to cheap subagents, require approval for frontier, keep deliberation opt-in. Workers escalate via `escalate: "frontier"` in their JSON, not by chatting with the governor. `init-session.sh` now creates `workers/` and `plan.json`
 - Moderator join is file polling of `opening/*.json`, not waiting on host chat or subagent-completion messages
 - Project positioning now treats Claude Code as the current default adapter rather than the
   permanent orchestration boundary

@@ -18,7 +18,7 @@ teardown() {
   assert_output --partial "Claude Code"
   assert_output --partial "deep-design"
   assert_output --partial "decision-board"
-  assert_output --partial "Astra"
+  assert_output --partial "Codex"
   assert_output --partial '$spectra'
 }
 
