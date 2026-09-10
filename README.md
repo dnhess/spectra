@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Lint](https://github.com/dnhess/spectra/actions/workflows/lint.yml/badge.svg)](https://github.com/dnhess/spectra/actions/workflows/lint.yml)
 
-A local-first **governor** for frontier agents. The host (Astra, Fable, Claude)
-stays on the expensive thread; Spectra routes scout and grunt work to cheap
-subagents and asks before any frontier call.
+A local-first **governor** for frontier agents. Codex or Claude stays on the
+expensive thread; Spectra routes scout and grunt work to cheap subagents
+and asks before any frontier call.
 
 ## Install (this is the whole thing)
 
@@ -16,9 +16,9 @@ subagents and asks before any frontier call.
 /plugin install spectra@spectra
 ```
 
-Then: `Use Spectra to keep Astra from doing the grep itself.`
+Then: `Use Spectra to keep Claude from doing the grep itself.`
 
-### Codex / Astra / ChatGPT
+### Codex / Claude
 
 If this repo is the workspace, enable the Spectra plugin from the local
 marketplace (`.agents/plugins/marketplace.json`). Or copy
@@ -84,7 +84,7 @@ spectra link .
 ### Management
 
 ```bash
-spectra how         # How to run a session on Claude vs Astra/Codex/Hermes
+spectra how         # How to run a session on Claude vs Codex
 spectra run <skill> # Prepare a Claude-hosted session directory and print the prompt
 spectra status      # Show installation info
 spectra budget      # Show local proxy-budget calibration data

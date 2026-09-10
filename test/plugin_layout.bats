@@ -99,6 +99,7 @@ PY
   grep -q "economical" "$skill" "$proto"
   grep -q "frontier" "$skill"
   grep -q "approval" "$skill"
+  grep -q 'escalate' "$skill" "$proto"
 }
 
 @test "route-plan example JSON is valid" {

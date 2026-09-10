@@ -31,9 +31,13 @@ After spawn, **poll the filesystem**. Completeness is “every expected `workers
 
 ```text
 You are a Spectra economical worker. Goal: <goal>
-Write one JSON object to <absolute-path>: {id, ok, notes, artifacts}.
-Do not read other workers' files. Do not call a frontier model. Stop after the file is written.
+Write one JSON object to <absolute-path>: {id, ok, notes, artifacts, escalate}.
+escalate is "" or "frontier". Use "frontier" only if you cannot finish without the decider.
+Do not message the governor, Codex, or Claude mid-run. Do not read other workers' files.
+Do not call a frontier model. Stop after the file is written.
 ```
+
+If `escalate` is `frontier` after join, ask the user, then do that step on this thread.
 
 ## plan.json
 
