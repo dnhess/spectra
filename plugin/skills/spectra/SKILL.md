@@ -15,6 +15,7 @@ This skill is host-agnostic. Use whatever native parallel agents this product pr
 1. Read [references/protocol.md](references/protocol.md).
 2. Read [references/personas.md](references/personas.md) for the chosen workflow.
 3. Create a session directory under `~/.spectra/sessions/<workflow>/<topic>-<timestamp>/{opening,discussion/round-1,final-positions}` or run `scripts/init-session.sh <workflow> <topic>`.
+4. Skim [references/examples/decision-board-quick.json](references/examples/decision-board-quick.json) for the synthesis shape.
 
 Workflows: `deep-design`, `decision-board`, `peer-review`, `trust-layer`, `coherence-monitor`. Default tier: `quick`.
 
@@ -22,6 +23,7 @@ Workflows: `deep-design`, `decision-board`, `peer-review`, `trust-layer`, `coher
 
 1. Confirm workflow, tier, and subject if missing.
 2. Spawn **one subagent per core persona in parallel**. Wait for all of them.
+   Use the worker prompt in [references/protocol.md](references/protocol.md).
    - Each worker gets only its persona brief and the subject
    - Each writes one JSON file to `<session>/opening/<persona-id>.json`
    - Workers must not read each other's files or edit the user's project (`peer-review` may read diffs)
