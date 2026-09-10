@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `spectra how` and `spectra run <skill>` so the CLI explains host launch and
+  prepares a Claude-hosted session directory instead of implying the CLI runs
+  the panel. Astra/GPT-6, Codex, and Hermes are refused with explicit next steps
+- Self-contained `plugin/` package (Agent Skills + Claude + Codex manifests).
+  Claude: `/plugin marketplace add dnhess/spectra` then `/plugin install spectra@spectra`.
+  Codex/Astra: `.agents/plugins/marketplace.json` or copy `plugin/skills/spectra`.
+  No CLI required for the default path
 - Versioned provider-neutral runtime contracts for graph dependencies, logical paths, join
   policies, retries, budgets, and runtime capability discovery
 - Codex adapter with strict validation, rendering, diagnostics, inert local dry runs, and an
