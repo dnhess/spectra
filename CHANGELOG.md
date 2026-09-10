@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Plugin first-run pack: worker prompt template, richer Quick persona briefs, and a decision-board synthesis example so the first `$spectra` / Claude install has a shape to copy
 - `spectra how` and `spectra run <skill>` so the CLI explains host launch and
   prepares a Claude-hosted session directory instead of implying the CLI runs
   the panel. Astra/GPT-6, Codex, and Hermes are refused with explicit next steps

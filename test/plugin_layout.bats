@@ -67,3 +67,33 @@ PY
   assert_success
   [[ -f "$HOME/.claude/skills/shared/orchestration.md" ]]
 }
+
+@test "init-session.sh creates the session tree" {
+  run env HOME="$HOME" bash "$PROJECT_ROOT/plugin/skills/spectra/scripts/init-session.sh" decision-board auth-mfa
+  assert_success
+  session_dir="$output"
+  [[ -d "$session_dir/opening" ]]
+  [[ -d "$session_dir/discussion/round-1" ]]
+  [[ -d "$session_dir/final-positions" ]]
+}
+
+@test "personas.md names every Quick core persona" {
+  personas="$PROJECT_ROOT/plugin/skills/spectra/references/personas.md"
+  for id in system-architect security-expert pm be-engineer architect pragmatist devils-advocate risk-assessor security-auditor reliability-engineer test-strategist maintainability-advocate package-validator intent-auditor security-challenger coherence-checker alignment-auditor contradiction-detector constraint-monitor devils-examiner; do
+    grep -q "$id" "$personas"
+  done
+}
+
+@test "decision-board example synthesis JSON is valid" {
+  run python3 - "$PROJECT_ROOT/plugin/skills/spectra/references/examples/decision-board-quick.json" <<'PY'
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+for key in ("workflow", "recommendation", "dissent", "conditions", "persona_count"):
+    assert key in data, key
+assert data["workflow"] == "decision-board"
+assert data["persona_count"] >= 4
+print("ok")
+PY
+  assert_success
+}

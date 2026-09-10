@@ -16,6 +16,15 @@ Coordination is a **typed artifact ledger**, not chat:
   handoff.md
 ```
 
+## Worker prompt (paste into each subagent)
+
+```text
+You are the <persona-id> persona. Read only the persona brief I give you and the subject.
+Write one JSON object to <absolute-opening-path>. Do not read other agents' files.
+Do not edit the user's project. No markdown fences around the file contents.
+Use the opening schema for this workflow. Stop after the file is written.
+```
+
 ## Opening JSON
 
 Decision-board: `agent`, `preferred_option`, `confidence` (0-1), `conditions` (array), `reasoning`, `options_assessed` (array).
@@ -29,3 +38,5 @@ Trust-layer / coherence-monitor: `agent`, `verdict` (`accept`|`reject`|`revise`)
 `synthesis-brief.json` must include `workflow`, `recommendation`, `dissent`, `conditions`, `persona_count`.
 
 `handoff.md` must include Session, Key Findings, Unresolved, Recommendations.
+
+See [examples/decision-board-quick.json](examples/decision-board-quick.json) for shape.
