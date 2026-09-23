@@ -184,16 +184,18 @@ check_text_file() {
   esac
 }
 
-# Report each diff hunk (or file header) that contains the forbidden needle.
-# must-contain is checked against the whole diff text; a miss names the diff path.
+# Report each diff hunk that introduces a forbidden needle.
+# The constraints file is ignored: its rule text is not a violation.
+# must-contain is a tree invariant, not a property of one diff, so a diff
+# that does not repeat the required string still passes.
 check_diff() {
   local kind="$1" needle="$2" path="$3"
-  local line="" file="" hunk=""
+  local line="" file="" hunk="" agents_base="AGENTS.md"
+  if [[ -n "${agents:-}" ]]; then
+    agents_base="$(basename "$agents")"
+  fi
   case "$kind" in
     must-contain)
-      if ! grep -F -q -- "$needle" "$path"; then
-        record_failure "must-contain: ${needle} file=${path}"
-      fi
       return 0
       ;;
     must-not-contain) ;;
@@ -217,6 +219,9 @@ check_diff() {
       hunk="${line#@@}"
       hunk="${hunk%%@@*}"
       hunk="@@${hunk}@@"
+    fi
+    if [[ -n "$file" && "$(basename "$file")" == "$agents_base" ]]; then
+      continue
     fi
     if printf '%s\n' "$line" | grep -F -q -- "$needle"; then
       local where="${file:-$path}"

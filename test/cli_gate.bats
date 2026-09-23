@@ -100,6 +100,40 @@ EOF
   assert_output --partial "@@ -1,2 +1,3 @@"
 }
 
+@test "gate does not fail a diff because the rule text was added to AGENTS.md" {
+  local repo="$TEST_TEMP/repo"
+  mkdir -p "$repo"
+  cat > "$repo/AGENTS.md" <<'EOF'
+## Constraints
+
+- must-not-contain: FORBIDDEN_TOKEN
+- must-contain: REQUIRED_TOKEN
+EOF
+  cat > "$repo/change.diff" <<'EOF'
+diff --git a/AGENTS.md b/AGENTS.md
+index 1111111..2222222 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -0,0 +1,4 @@
++## Constraints
++
++- must-not-contain: FORBIDDEN_TOKEN
++- must-contain: REQUIRED_TOKEN
+diff --git a/src/app.py b/src/app.py
+index 1111111..2222222 100644
+--- a/src/app.py
++++ b/src/app.py
+@@ -1,2 +1,3 @@
+ keep
++a normal line
+ context
+EOF
+
+  run "$SPECTRA_CLI" gate --agents "$repo/AGENTS.md" --diff "$repo/change.diff"
+  assert_success
+  assert_output --partial "gate: pass"
+}
+
 @test "gate exits 2 when the Constraints section has no enforceable rules" {
   local repo="$TEST_TEMP/repo"
   mkdir -p "$repo"

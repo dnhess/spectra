@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `spectra gate --diff` ignores the constraints file and does not treat `must-contain` as a property of one change. Run `spectra gate .` for tree invariants
 - `spectra gate` can scan a directory. `must-not-contain` fails if any file matches. `must-contain` passes if any file matches. The constraints file itself is not scanned
 - `spectra gate` fails a local run when a file or diff violates literal `must-not-contain:` or `must-contain:` rules in AGENTS.md. No constraints exits 2. A pass prints `gate: pass`
 - Plugin first-run pack: worker prompt template, richer Quick persona briefs, and a decision-board synthesis example so the first `$spectra` / Claude install has a shape to copy
