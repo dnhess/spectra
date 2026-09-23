@@ -165,4 +165,68 @@ EOF
   assert_output --partial "gate: pass"
 }
 
+@test "gate exits 1 and names the child file when a directory violates must-not-contain" {
+  local repo="$TEST_TEMP/repo"
+  mkdir -p "$repo/nested"
+  cat > "$repo/AGENTS.md" <<'EOF'
+## Constraints
+
+- must-not-contain: FORBIDDEN_TOKEN
+EOF
+  printf 'clean\n' > "$repo/nested/ok.txt"
+  printf 'has FORBIDDEN_TOKEN\n' > "$repo/nested/bad.txt"
+
+  run "$SPECTRA_CLI" gate "$repo"
+  assert_failure 1
+  assert_output --partial "must-not-contain: FORBIDDEN_TOKEN"
+  assert_output --partial "nested/bad.txt"
+}
+
+@test "gate does not fail a directory because the rule text is in AGENTS.md" {
+  local repo="$TEST_TEMP/repo"
+  mkdir -p "$repo"
+  cat > "$repo/AGENTS.md" <<'EOF'
+## Constraints
+
+- must-not-contain: FORBIDDEN_TOKEN
+EOF
+  printf 'clean file\n' > "$repo/ok.txt"
+
+  run "$SPECTRA_CLI" gate "$repo"
+  assert_success
+  assert_output --partial "gate: pass"
+}
+
+@test "gate accepts a directory when must-contain is satisfied by one file" {
+  local repo="$TEST_TEMP/repo"
+  mkdir -p "$repo/nested"
+  cat > "$repo/AGENTS.md" <<'EOF'
+## Constraints
+
+- must-contain: REQUIRED_TOKEN
+EOF
+  printf 'clean file\n' > "$repo/ok.txt"
+  printf 'REQUIRED_TOKEN\n' > "$repo/nested/has.txt"
+
+  run "$SPECTRA_CLI" gate "$repo"
+  assert_success
+  assert_output --partial "gate: pass"
+}
+
+@test "gate . from inside the repo does not fail on the rule text" {
+  local repo="$TEST_TEMP/repo"
+  mkdir -p "$repo"
+  cat > "$repo/AGENTS.md" <<'EOF'
+## Constraints
+
+- must-not-contain: FORBIDDEN_TOKEN
+EOF
+  printf 'clean file\n' > "$repo/ok.txt"
+
+  cd "$repo"
+  run "$SPECTRA_CLI" gate .
+  assert_success
+  assert_output --partial "gate: pass"
+}
+
 

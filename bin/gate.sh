@@ -13,6 +13,7 @@ usage() {
 agents=""
 input=""
 is_diff=0
+is_dir=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       echo "Usage: spectra gate [--agents AGENTS.md] [--diff] <path>"
       echo "Read literal constraints from AGENTS.md and fail the run if the input violates them."
+      echo "A directory is scanned as a tree. must-not-contain fails if any file matches."
       echo "Exit 0 when every rule passes, 1 on a violation, 2 when no constraints can be enforced."
       exit 0
       ;;
@@ -60,14 +62,19 @@ fi
 
 [[ -n "$input" ]] || usage
 
-if [[ ! -f "$input" ]]; then
+if [[ -d "$input" ]]; then
+  is_dir=1
+  input="$(cd "$input" && pwd)"
+elif [[ ! -f "$input" ]]; then
   echo "gate: input not found: $input" >&2
   exit 2
 fi
 
 if [[ -z "$agents" ]]; then
   search_dir="$(pwd)"
-  if [[ "$is_diff" -eq 0 ]]; then
+  if [[ "$is_diff" -eq 0 && "$is_dir" -eq 1 ]]; then
+    search_dir="$(cd "$input" && pwd)"
+  elif [[ "$is_diff" -eq 0 ]]; then
     search_dir="$(cd "$(dirname "$input")" && pwd)"
   fi
   while true; do
@@ -222,11 +229,46 @@ check_diff() {
   done < "$path"
 }
 
+check_tree() {
+  local kind="$1" needle="$2" root="$3"
+  local file agents_real="" found=0
+  if [[ -n "$agents" && -f "$agents" ]]; then
+    agents_real="$(cd "$(dirname "$agents")" && pwd)/$(basename "$agents")"
+  fi
+  if [[ "$kind" == "must-contain" ]]; then
+    while IFS= read -r -d '' file; do
+      if [[ -n "$agents_real" && "$file" == "$agents_real" ]]; then
+        continue
+      fi
+      if grep -F -q -- "$needle" "$file"; then
+        found=1
+        break
+      fi
+    done < <(find "$root" \
+      \( -name .git -o -name node_modules -o -name .worktrees \) -prune -o \
+      -type f -print0)
+    if [[ "$found" -eq 0 ]]; then
+      record_failure "must-contain: ${needle} file=${root}"
+    fi
+    return 0
+  fi
+  while IFS= read -r -d '' file; do
+    if [[ -n "$agents_real" && "$file" == "$agents_real" ]]; then
+      continue
+    fi
+    check_text_file "$kind" "$needle" "$file"
+  done < <(find "$root" \
+    \( -name .git -o -name node_modules -o -name .worktrees \) -prune -o \
+    -type f -print0)
+}
+
 for rule in "${rules[@]}"; do
   kind="${rule%%$'\t'*}"
   needle="${rule#*$'\t'}"
   if [[ "$is_diff" -eq 1 ]]; then
     check_diff "$kind" "$needle" "$input"
+  elif [[ "$is_dir" -eq 1 ]]; then
+    check_tree "$kind" "$needle" "$input"
   else
     check_text_file "$kind" "$needle" "$input"
   fi
