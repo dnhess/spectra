@@ -67,6 +67,23 @@ jobs:
       - run: npm install
       - run: npm test
 
+  constraint-gate:
+    name: Constraint Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tree invariants
+        run: bin/spectra gate .
+      - name: Pull request diff
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${{ github.event.pull_request.base.sha }}"
+          git diff "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" > "$RUNNER_TEMP/pr.diff"
+          bin/spectra gate --diff "$RUNNER_TEMP/pr.diff"
+
   changelog:
     name: Changelog Updated
     runs-on: ubuntu-latest

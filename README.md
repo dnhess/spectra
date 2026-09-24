@@ -85,6 +85,8 @@ spectra link .
 ```bash
 spectra how         # How to run a session on Claude vs Astra/Codex/Hermes
 spectra run <skill> # Prepare a Claude-hosted session directory and print the prompt
+spectra gate --agents AGENTS.md <file>  # Fail if the file violates AGENTS.md constraints
+spectra gate --diff change.diff         # Same check against a unified diff
 spectra status      # Show installation info
 spectra budget      # Show local proxy-budget calibration data
 spectra budget calibrate --json  # Review lower-only recommendations after enough completed runs

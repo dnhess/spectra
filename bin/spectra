@@ -162,6 +162,10 @@ install_bin_files() {
     cp "$extract_dir/bin/json-write.sh" "$BIN_DIR/json-write.sh"
     chmod +x "$BIN_DIR/json-write.sh"
   fi
+  if [[ -f "$extract_dir/bin/gate.sh" ]]; then
+    cp "$extract_dir/bin/gate.sh" "$BIN_DIR/gate.sh"
+    chmod +x "$BIN_DIR/gate.sh"
+  fi
   rm -rf "${extract_dir:?}/bin"
 }
 
@@ -692,6 +696,9 @@ cmd_link() {
     if [[ -f "$repo_path/bin/json-write.sh" ]]; then
       ln -sfn "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
     fi
+    if [[ -f "$repo_path/bin/gate.sh" ]]; then
+      ln -sfn "$repo_path/bin/gate.sh" "$BIN_DIR/gate.sh"
+    fi
     # Add to PATH via ~/.local/bin
     mkdir -p "$HOME/.local/bin"
     ln -sfn "$BIN_DIR/spectra" "$HOME/.local/bin/spectra"
@@ -738,6 +745,9 @@ print()
   ln -sfn "$repo_path/bin/spectra" "$BIN_DIR/spectra"
   if [[ -f "$repo_path/bin/json-write.sh" ]]; then
     ln -sfn "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+  fi
+  if [[ -f "$repo_path/bin/gate.sh" ]]; then
+    ln -sfn "$repo_path/bin/gate.sh" "$BIN_DIR/gate.sh"
   fi
   log_success "Linked CLI to repo"
 
@@ -812,6 +822,11 @@ cmd_unlink() {
           rm -f "$BIN_DIR/json-write.sh"
           cp "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
           chmod +x "$BIN_DIR/json-write.sh"
+        fi
+        if [[ -f "$repo_path/bin/gate.sh" ]]; then
+          rm -f "$BIN_DIR/gate.sh"
+          cp "$repo_path/bin/gate.sh" "$BIN_DIR/gate.sh"
+          chmod +x "$BIN_DIR/gate.sh"
         fi
       fi
     fi
@@ -1492,6 +1507,23 @@ PY
   fi
 }
 
+cmd_gate() {
+  local here source gate
+  source="${BASH_SOURCE[0]}"
+  while [[ -L "$source" ]]; do
+    here="$(cd "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    [[ "$source" != /* ]] && source="$here/$source"
+  done
+  here="$(cd "$(dirname "$source")" && pwd)"
+  gate="$here/gate.sh"
+  if [[ ! -f "$gate" ]]; then
+    log_error "gate helper not found: $gate"
+    exit 2
+  fi
+  bash "$gate" "$@"
+}
+
 cmd_help() {
   cat <<EOF
 spectra — Spectra CLI for managing multi-agent skills
@@ -1511,6 +1543,7 @@ Commands:
   runtime ...       Inspect, preview, or execute a local agent runtime adapter
   how               How to run a session on each host
   run <skill>       Prepare a session and print host launch instructions
+  gate              Fail the run if an AGENTS.md constraint is violated
   backup list       List settings.json backups
   backup restore    Restore a settings.json backup
   version           Show version
@@ -1546,6 +1579,7 @@ main() {
     runtime)          cmd_runtime "$@" ;;
     how)              cmd_how "$@" ;;
     run)              cmd_run "$@" ;;
+    gate)             cmd_gate "$@" ;;
     backup)           cmd_backup "$@" ;;
     help|--help|-h)   cmd_help ;;
     version|--version|-v) cmd_version ;;
