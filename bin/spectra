@@ -1273,17 +1273,15 @@ Spectra CLI does not run deliberation. Install the plugin, then talk to the host
 Claude Code
   /plugin marketplace add dnhess/spectra
   /plugin install spectra@spectra
-  Then: Use Spectra to debate whether we require MFA.
+  Then: Use Spectra to keep Claude from doing the grep itself.
 
-Codex / Astra / Astro
+Codex
   Enable the Spectra plugin from this repo's marketplace, or copy
   plugin/skills/spectra to ~/.agents/skills/spectra
   Then invoke $spectra
 
-Workflows: deep-design, decision-board, peer-review, trust-layer, coherence-monitor.
-
-Hermes
-  Copy plugin/skills/spectra into your skills directory.
+Governor default: cheap workers, ask before frontier.
+Deliberation opt-in: deep-design, decision-board, peer-review, trust-layer, coherence-monitor.
 
 Do not copy the original Claude Code SKILL.md tree into Codex.
 EOF

@@ -1,6 +1,6 @@
 {
   "name": "spectra",
-  "description": "Multi-agent deliberation for design review, decision debate, peer review, trust, and coherence audit.",
+  "description": "Govern frontier sessions: cheap subagents for grunt work, approval for frontier calls.",
   "version": "0.3.0",
   "author": {
     "name": "Dillon Hess",

@@ -1,0 +1,7 @@
+{
+  "id": "scout",
+  "ok": true,
+  "notes": "README already has Install and Available Skills; Governor fits after Install.",
+  "artifacts": ["README.md"],
+  "escalate": ""
+}
