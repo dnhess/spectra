@@ -430,3 +430,33 @@
   cache was moved to a recoverable temporary location; the pre-existing adapter cache was preserved.
 - A future manual dispatch requires an exact Codex package version and native Linux x64 SHA-256.
   Even a successful report remains evidence-only and cannot authorize a real worker.
+
+## Clean-host workflow validation repair
+
+### Plan
+
+- [x] Move runner-specific temporary paths out of job-level environment expressions.
+- [x] Add a regression check that forbids the `runner` context in `jobs.<job_id>.env`.
+- [x] Preserve the manual-only, no-secret, no-provider, and sanitized-artifact boundaries.
+- [x] Run focused and complete inert verification plus final read-only review.
+- [x] Publish a focused bugfix PR; do not dispatch the workflow or create a release in this change.
+
+### Evidence
+
+- Merge run `33468629740` was rejected before scheduling any job and produced no logs or artifacts.
+- GitHub permits `runner` in step-level environment expressions but not in `jobs.<job_id>.env`.
+- Run `33468630414` was the ordinary CI workflow, not the clean-host inspection.
+- The release workflow remains tag-only; a merge to `main` intentionally creates no release build.
+
+### Review
+
+- `BUILD_ROOT` and `EVIDENCE_ROOT` now use `runner.temp` only in the Stage, Build, Run, and Upload
+  step environments where the runner context is valid.
+- The producer/consumer path formulas remain identical. No trigger, permission, action pin, Docker
+  argument, secret, mount, logging, sanitizer, or artifact-scope boundary changed.
+- The location-aware regression test fails if `runner` returns to job-level `env` and requires
+  exactly two correctly indented declarations for each runner-owned root.
+- Focused workflow tests pass 12/12 and the complete inert repository suite passes 410/410.
+  Markdown lint, ShellCheck, workflow YAML parsing, and diff hygiene pass.
+- Final independent read-only review found no blocking findings. No workflow dispatch, Docker run,
+  release build, provider request, or Codex worker ran during this repair.

@@ -182,6 +182,19 @@ invoke_runner() {
   [[ "${#lines[@]}" -eq 2 ]]
 }
 
+@test "runner paths use only context-valid step environments" {
+  job_env="$(sed -n '/^    env:$/,/^    steps:$/p' "$WORKFLOW")"
+  [[ "$job_env" != *'${{ runner.'* ]]
+
+  run grep -F '          BUILD_ROOT: ${{ runner.temp }}/spectra-codex-clean-host-build-${{ github.run_id }}-${{ github.run_attempt }}' "$WORKFLOW"
+  assert_success
+  [[ "${#lines[@]}" -eq 2 ]]
+
+  run grep -F '          EVIDENCE_ROOT: ${{ runner.temp }}/spectra-codex-clean-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}' "$WORKFLOW"
+  assert_success
+  [[ "${#lines[@]}" -eq 2 ]]
+}
+
 @test "workflow delegates evidence capture to the host-bounded runner" {
   run grep -F 'docker build --platform linux/amd64 --pull --no-cache' "$WORKFLOW"
   assert_success

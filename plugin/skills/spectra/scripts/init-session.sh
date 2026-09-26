@@ -11,5 +11,6 @@ fi
 
 ts="$(date +%Y%m%dT%H%M%S)"
 session_dir="${HOME}/.spectra/sessions/${skill}/${topic}-${ts}"
-mkdir -p "$session_dir"/{opening,discussion/round-1,final-positions}
+mkdir -p "$session_dir"/{opening,discussion/round-1,final-positions,workers}
+printf '%s\n' '{"steps":[]}' > "$session_dir/plan.json"
 printf '%s\n' "$session_dir"
