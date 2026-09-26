@@ -80,9 +80,13 @@ def validate(event):
     if not isinstance(seq, int) or seq < 1:
         errors.append(f"sequence_number must be a positive integer, got: {seq}")
 
-    # schema_version must be "1.0.0"
-    if event["schema_version"] not in ("1.0.0", "1.1.0"):
-        errors.append(f"schema_version must be '1.0.0' or '1.1.0', got: {event['schema_version']}")
+    # Accept all backward-compatible event schema revisions.
+    supported_versions = ("1.0.0", "1.1.0", "1.2.0")
+    if event["schema_version"] not in supported_versions:
+        errors.append(
+            "schema_version must be '1.0.0', '1.1.0', or '1.2.0', "
+            f"got: {event['schema_version']}"
+        )
 
     # timestamp must be ISO-8601
     if not ISO8601_RE.match(str(event["timestamp"])):

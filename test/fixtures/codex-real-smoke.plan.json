@@ -1,0 +1,71 @@
+{
+  "version": "0.1",
+  "session_id": "codex-real-smoke",
+  "workflow": "peer-review",
+  "tier": "quick",
+  "phase": {
+    "id": "opening",
+    "join": {
+      "required_successes": 1,
+      "deadline_seconds": 120,
+      "on_timeout": "fail",
+      "cancel_remaining_on_quorum": true
+    }
+  },
+  "actions": [
+    {
+      "id": "review-design",
+      "action": "spawn",
+      "depends_on": [],
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": 0
+      },
+      "worker": {
+        "id": "design-critic",
+        "role": "reviewer",
+        "prompt_file": {
+          "root": "spectra",
+          "path": "peer-review/personas/design-critic.md"
+        },
+        "output_path": {
+          "root": "session",
+          "path": "opening/design-critic.json"
+        }
+      },
+      "execution": {
+        "model_class": "standard",
+        "max_turns": 1,
+        "background": true,
+        "permissions": {
+          "read_paths": [
+            {
+              "root": "workspace",
+              "path": "src"
+            }
+          ],
+          "write_paths": [
+            {
+              "root": "session",
+              "path": "opening"
+            }
+          ],
+          "network": false
+        }
+      },
+      "completion": {
+        "kind": "artifact",
+        "path": {
+          "root": "session",
+          "path": "opening/design-critic.json"
+        },
+        "schema": "peer-review-opening-v1"
+      },
+      "budget": {
+        "add_agent_spawns": 1,
+        "add_model_calls": 1,
+        "phase": "opening"
+      }
+    }
+  ]
+}

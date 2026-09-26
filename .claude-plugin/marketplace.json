@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "spectra",
+  "description": "Spectra multi-agent deliberation plugins",
+  "owner": {
+    "name": "Dillon Hess",
+    "url": "https://github.com/dnhess"
+  },
+  "plugins": [
+    {
+      "name": "spectra",
+      "source": "./plugin",
+      "description": "One portable Spectra skill for design review, decisions, peer review, trust, and coherence.",
+      "version": "0.3.0"
+    }
+  ]
+}

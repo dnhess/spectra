@@ -1,0 +1,6 @@
+{
+  "name": "spectra",
+  "description": "Multi-agent deliberation for design review, decision debate, peer review, trust, and coherence audit.",
+  "version": "0.3.0",
+  "skills": "./skills/"
+}

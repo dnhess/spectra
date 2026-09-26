@@ -1,0 +1,12 @@
+{
+  "name": "spectra",
+  "description": "Multi-agent deliberation for design review, decision debate, peer review, trust, and coherence audit.",
+  "version": "0.3.0",
+  "author": {
+    "name": "Dillon Hess",
+    "url": "https://github.com/dnhess"
+  },
+  "homepage": "https://github.com/dnhess/spectra",
+  "repository": "https://github.com/dnhess/spectra",
+  "license": "MIT"
+}

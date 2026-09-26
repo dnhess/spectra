@@ -1,0 +1,6 @@
+interface:
+  display_name: Spectra
+  short_description: Multi-agent deliberation on Astra
+  default_prompt: "$spectra "
+policy:
+  allow_implicit_invocation: true

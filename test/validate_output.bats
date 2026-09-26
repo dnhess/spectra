@@ -23,6 +23,16 @@ FIXTURES="test/fixtures/validation"
   assert_output --partial '"stage": "accepted"'
 }
 
+@test "valid peer-review opening artifact passes all stages" {
+  local f="$TEST_TEMP/peer-review.json"
+  cat > "$f" <<'JSON'
+{"reviewer":"design-critic","findings":[]}
+JSON
+  run bash "$PROJECT_ROOT/$VALIDATE" "$f" opening peer-review
+  assert_success
+  assert_output --partial '"valid": true'
+}
+
 @test "valid discussion rebuttal passes" {
   local f="$TEST_TEMP/rebuttal.json"
   cat > "$f" <<'JSON'
@@ -97,6 +107,15 @@ JSON
   run bash "$PROJECT_ROOT/$VALIDATE" "$f" opening deep-design
   assert_failure
   assert_output --partial '"stage": "schema_validate"'
+}
+
+@test "peer-review opening artifact requires reviewer and findings" {
+  local f="$TEST_TEMP/peer-review-missing.json"
+  echo '{"reviewer":"design-critic"}' > "$f"
+  run bash "$PROJECT_ROOT/$VALIDATE" "$f" opening peer-review
+  assert_failure
+  assert_output --partial '"stage": "schema_validate"'
+  assert_output --partial "Missing required field: findings"
 }
 
 # --- Stage 4: Content sanitize ---

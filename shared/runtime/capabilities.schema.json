@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spectra.dev/schemas/runtime/capabilities-0.1.json",
+  "title": "Spectra Runtime Capabilities",
+  "type": "object", "additionalProperties": false,
+  "required": ["version", "runtime", "execution_enabled", "supported_operations", "capabilities"],
+  "properties": {
+    "version": {"const": "0.1"}, "runtime": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+    "execution_enabled": {"const": true},
+    "supported_operations": {"type": "array", "uniqueItems": true, "items": {"enum": ["capabilities", "validate", "render", "dry-run", "inspect-context", "preview", "execute", "doctor"]}},
+    "capabilities": {"type": "object", "additionalProperties": false,
+      "required": ["supports_background_workers", "supports_nested_workers", "supports_structured_output", "supports_resume", "supports_worktrees", "supports_network_control", "requires_explicit_execution_profile", "isolates_user_home", "max_parallelism", "model_classes"],
+      "properties": {"supports_background_workers": {"const": true}, "supports_nested_workers": {"const": false}, "supports_structured_output": {"const": true}, "supports_resume": {"const": false}, "supports_worktrees": {"const": false}, "supports_network_control": {"const": false}, "requires_explicit_execution_profile": {"const": true}, "isolates_user_home": {"const": true}, "max_parallelism": {"const": 2}, "model_classes": {"const": ["economical", "standard", "frontier"]}}
+    }
+  }
+}

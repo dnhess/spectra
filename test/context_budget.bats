@@ -101,10 +101,10 @@ print('OK')
 }
 
 # ---------------------------------------------------------------------------
-# Threshold detection
+# Legacy fallback threshold examples
 # ---------------------------------------------------------------------------
 
-@test "Quick tier: warning threshold at 1+ rounds" {
+@test "legacy fallback: Quick tier warning threshold at 1+ rounds" {
   run python3 -c "
 rounds = 1
 tier_max_rounds_caution = 1  # Quick tier
@@ -116,7 +116,7 @@ print('OK')
   assert_output "OK"
 }
 
-@test "Standard tier: caution threshold at 3+ rounds" {
+@test "legacy fallback: Standard tier caution threshold at 3+ rounds" {
   run python3 -c "
 rounds = 3
 tier_max_rounds_caution = 3  # Standard tier
@@ -128,7 +128,7 @@ print('OK')
   assert_output "OK"
 }
 
-@test "Standard tier: caution threshold at >150KB output" {
+@test "legacy fallback: Standard tier caution threshold at >150KB output" {
   run python3 -c "
 output_kb = 155.0
 tier_max_output_kb = 150  # Standard tier
@@ -140,7 +140,7 @@ print('OK')
   assert_output "OK"
 }
 
-@test "Deep tier: caution threshold at 5+ rounds" {
+@test "legacy fallback: Deep tier caution threshold at 5+ rounds" {
   run python3 -c "
 rounds = 5
 tier_max_rounds_caution = 5  # Deep tier

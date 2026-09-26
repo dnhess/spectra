@@ -57,8 +57,21 @@ bootstrap_installed_state() {
       mkdir -p "$SPECTRA_HOME/skills/$skill/personas"
     fi
   done
-  mkdir -p "$SPECTRA_HOME/skills/shared/tools"
+  mkdir -p "$SPECTRA_HOME/skills/shared/tools" "$SPECTRA_HOME/skills/shared/schemas"
   touch "$SPECTRA_HOME/skills/shared/orchestration.md"
+  for budget_tool in budget-metrics.py budget-metrics.sh budget-report.py budget-report.sh; do
+    if [[ -f "$PROJECT_ROOT/shared/tools/$budget_tool" ]]; then
+      cp "$PROJECT_ROOT/shared/tools/$budget_tool" "$SPECTRA_HOME/skills/shared/tools/$budget_tool"
+    fi
+  done
+  [[ ! -f "$SPECTRA_HOME/skills/shared/tools/budget-report.sh" ]] || \
+    chmod +x "$SPECTRA_HOME/skills/shared/tools/budget-report.sh"
+  [[ ! -f "$SPECTRA_HOME/skills/shared/tools/budget-metrics.sh" ]] || \
+    chmod +x "$SPECTRA_HOME/skills/shared/tools/budget-metrics.sh"
+  if [[ -f "$PROJECT_ROOT/shared/schemas/budget-policies.json" ]]; then
+    cp "$PROJECT_ROOT/shared/schemas/budget-policies.json" \
+      "$SPECTRA_HOME/skills/shared/schemas/budget-policies.json"
+  fi
 
   # Create symlinks
   for skill in shared deep-design decision-board peer-review trust-layer coherence-monitor; do
@@ -75,6 +88,9 @@ bootstrap_installed_state() {
       "Bash(bash ~/.spectra/bin/json-write.sh *)",
       "Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)",
       "Bash(bash ~/.claude/skills/shared/tools/db-utils.sh *)",
+      "Bash(bash ~/.claude/skills/shared/tools/budget-policy.sh *)",
+      "Bash(bash ~/.claude/skills/shared/tools/budget-metrics.sh *)",
+      "Bash(bash ~/.claude/skills/shared/tools/budget-report.sh *)",
       "Write(~/.spectra/sessions/**)",
       "Read(~/.spectra/sessions/**)",
       "Glob(~/.spectra/sessions/**)",
@@ -91,6 +107,13 @@ create_fake_repo() {
   mkdir -p "$repo_dir"/{shared/tools,bin}
   touch "$repo_dir/install.sh"
   touch "$repo_dir/shared/orchestration.md"
+  for budget_tool in budget-metrics.py budget-metrics.sh budget-report.py budget-report.sh; do
+    if [[ -f "$PROJECT_ROOT/shared/tools/$budget_tool" ]]; then
+      cp "$PROJECT_ROOT/shared/tools/$budget_tool" "$repo_dir/shared/tools/$budget_tool"
+    fi
+  done
+  [[ ! -f "$repo_dir/shared/tools/budget-report.sh" ]] || chmod +x "$repo_dir/shared/tools/budget-report.sh"
+  [[ ! -f "$repo_dir/shared/tools/budget-metrics.sh" ]] || chmod +x "$repo_dir/shared/tools/budget-metrics.sh"
   cp "$PROJECT_ROOT/bin/spectra" "$repo_dir/bin/spectra"
   chmod +x "$repo_dir/bin/spectra"
   if [[ -f "$PROJECT_ROOT/bin/json-write.sh" ]]; then
@@ -405,10 +428,15 @@ create_fake_tarball() {
 
   # Build a directory tree that matches what the installer expects
   local staging="$output_dir/staging"
-  mkdir -p "$staging"/{shared/tools,bin}
+  mkdir -p "$staging"/{shared/tools,bin,adapters}
   touch "$staging/shared/orchestration.md"
 
-  for skill in deep-design decision-board peer-review; do
+  if [[ -d "$PROJECT_ROOT/adapters/codex" ]]; then
+    cp -R "$PROJECT_ROOT/adapters/codex" "$staging/adapters/"
+    rm -rf "$staging/adapters/codex/__pycache__"
+  fi
+
+  for skill in deep-design decision-board peer-review trust-layer coherence-monitor; do
     mkdir -p "$staging/$skill/personas"
     echo "# $skill SKILL.md ($tag)" > "$staging/$skill/SKILL.md"
   done

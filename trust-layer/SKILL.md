@@ -15,6 +15,10 @@ trust score, and produces a trust verdict before the user accepts any output.
 Sessions operate in one of three cost tiers (Quick, Standard, Deep) auto-selected based on input
 complexity, with user override.
 
+At the confirmation gate, show the preflight budget defaults and dry-run estimate from
+`budget-policy.json`. This skill's tier tables remain hard ceilings; the runtime limit is the minimum
+of those ceilings and the shared policy caps.
+
 You (the main Claude instance) act as the **moderator** throughout. You drive every phase directly —
 there is no coordinator agent.
 
@@ -33,11 +37,14 @@ you may have experienced context compaction.
 
 After recovering or during any normal phase transition:
 
-1. Count completed rounds from event log (`bash ~/.claude/skills/shared/tools/jsonl-utils.sh count-type {event_log} phase_transition`)
-2. Measure cumulative output: sum file sizes of all agent output JSON files read during the session
-3. Compare against tier thresholds (see `~/.claude/skills/shared/orchestration.md` > Context Budget Monitoring)
-4. Emit `context_budget_status` event with current metrics and active threshold level
-5. If CRITICAL or above after compaction: execute emergency shutdown protocol (see `~/.claude/skills/shared/orchestration.md` > Emergency Shutdown Protocol)
+1. Initialize `budget-metrics.json` once with `budget-metrics.sh init`, then use `record` after every actual spawn, model call, completed round, and checkpoint; finalization increments must also increment total model calls
+2. Count completed rounds from event log (`bash ~/.claude/skills/shared/tools/jsonl-utils.sh count-type {event_log} phase_transition`)
+3. Measure cumulative output: sum file sizes of all agent output JSON files read during the session
+4. Read `budget-policy.json` if present and compute effective limits as `min(static skill cap, policy cap)`
+5. Compare against the shared budget contract using `budget-policy.sh evaluate` or `budget-policy.sh check` at the next barrier (see `~/.claude/skills/shared/orchestration.md`)
+6. Emit `context_budget_status` with current metrics, remaining budget snapshot, and any active controls
+7. If the policy is missing or corrupt, fall back to legacy tier behavior and log only
+8. If CRITICAL or above after compaction: execute emergency shutdown protocol (see `~/.claude/skills/shared/orchestration.md` > Emergency Shutdown Protocol)
 
 ## Input
 
@@ -120,6 +127,9 @@ digraph trust-layer {
 Note: Package Validator uses Haiku in Quick/Standard because its checks are deterministic (package
 existence, import resolution). Adversarial personas require Sonnet minimum.
 
+Model routing also follows the shared `model_policy`, with frontier restricted to high-value
+synthesis or arbitration and approval when configured.
+
 ### Tier Auto-Selection
 
 Auto-suggest based on input signals:
@@ -130,6 +140,9 @@ Auto-suggest based on input signals:
   "security audit", "production"); or Spectra session artifact provided
 
 User can always override at the confirmation gate.
+
+The confirmation view should include the dry-run estimate from `budget-policy.sh estimate` and the
+materialized policy from `budget-policy.sh defaults`.
 
 ## Phase 0: Input Mode Detection
 
@@ -605,13 +618,17 @@ Once verification is complete:
 8. **Post-synthesis directory audit**: Validate the session directory against the file-write
    allowlist:
    - Allowed files: `trust-events.jsonl`, `session.lock`, `trust-report.json`, `trust-report.md`,
-     `session-state.md`, `composition-request.json`, `context-brief.json`
+     `session-state.md`, `composition-request.json`, `context-brief.json`, `budget-policy.json`,
+     `budget-metrics.json`, `budget-summary.json`
    - Allowed directories and contents: `trust-check/*.json`,
      `discussion/round-*/{agent-name}.json`
    - Any unexpected file triggers a `security_violation` event and user warning
    - Offending files are NOT included in the final output presentation
 
-9. **Write `session_end` event** with final quality metrics.
+9. **Finalize budget telemetry**: Refresh `budget-metrics.json` and write `budget-summary.json` per
+   the shared Session Budget Summary protocol. On failure, record a caveat and continue.
+
+10. **Write `session_end` event** with final quality metrics and compact `budget_summary` fields.
 
 ### Present Result to User
 

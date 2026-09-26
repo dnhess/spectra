@@ -351,7 +351,7 @@ print(json.dumps({
 
   run python3 "$PROJECT_ROOT/test/helpers/validate_event.py" "$event"
   assert_failure
-  assert_output --partial "schema_version must be '1.0.0' or '1.1.0'"
+  assert_output --partial "schema_version must be '1.0.0', '1.1.0', or '1.2.0'"
 }
 
 @test "validate_event: schema_version 1.1.0 accepted" {
@@ -362,6 +362,23 @@ print(json.dumps({
     'event_id': str(uuid.uuid4()),
     'sequence_number': 1,
     'schema_version': '1.1.0',
+    'session_id': 'test-session-001',
+    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'type': 'context_budget_status'
+}))")"
+
+  run python3 "$PROJECT_ROOT/test/helpers/validate_event.py" "$event"
+  assert_success
+}
+
+@test "validate_event: schema_version 1.2.0 accepted" {
+  local event
+  event="$(python3 -c "
+import json, uuid, datetime
+print(json.dumps({
+    'event_id': str(uuid.uuid4()),
+    'sequence_number': 1,
+    'schema_version': '1.2.0',
     'session_id': 'test-session-001',
     'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
     'type': 'context_budget_status'
