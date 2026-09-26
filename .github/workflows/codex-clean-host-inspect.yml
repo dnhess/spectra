@@ -24,8 +24,6 @@ jobs:
       CODEX_VERSION: ${{ inputs.codex_version }}
       CODEX_BINARY_SHA256: ${{ inputs.codex_binary_sha256 }}
       INSPECT_IMAGE: spectra-codex-clean-host:${{ github.run_id }}-${{ github.run_attempt }}
-      EVIDENCE_ROOT: ${{ runner.temp }}/spectra-codex-clean-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}
-      BUILD_ROOT: ${{ runner.temp }}/spectra-codex-clean-host-build-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Check out the diagnostic source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -41,6 +39,8 @@ jobs:
 
       - name: Stage the minimal build context
         shell: bash
+        env:
+          BUILD_ROOT: ${{ runner.temp }}/spectra-codex-clean-host-build-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
           umask 077
@@ -51,6 +51,8 @@ jobs:
 
       - name: Build the pinned diagnostic image
         shell: bash
+        env:
+          BUILD_ROOT: ${{ runner.temp }}/spectra-codex-clean-host-build-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
           docker build --platform linux/amd64 --pull --no-cache \
@@ -62,6 +64,7 @@ jobs:
       - name: Run and sanitize the network-disabled inspection
         shell: bash
         env:
+          EVIDENCE_ROOT: ${{ runner.temp }}/spectra-codex-clean-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           WORKFLOW_COMMIT: ${{ github.sha }}
           RUNNER_OS_NAME: ${{ runner.os }}
           RUNNER_ARCH_NAME: ${{ runner.arch }}
@@ -79,6 +82,8 @@ jobs:
 
       - name: Upload redacted evidence only
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        env:
+          EVIDENCE_ROOT: ${{ runner.temp }}/spectra-codex-clean-host-evidence-${{ github.run_id }}-${{ github.run_attempt }}
         with:
           name: codex-clean-host-inspect-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
