@@ -150,6 +150,10 @@ sys.exit(1)
     cp "$SPECTRA_HOME/skills/bin/json-write.sh" "$SPECTRA_HOME/bin/json-write.sh"
     chmod +x "$SPECTRA_HOME/bin/json-write.sh"
   fi
+  if [[ -f "$SPECTRA_HOME/skills/bin/gate.sh" ]]; then
+    cp "$SPECTRA_HOME/skills/bin/gate.sh" "$SPECTRA_HOME/bin/gate.sh"
+    chmod +x "$SPECTRA_HOME/bin/gate.sh"
+  fi
   rm -rf "$SPECTRA_HOME/skills/bin"
 
   echo "$version" > "$SPECTRA_HOME/version"
