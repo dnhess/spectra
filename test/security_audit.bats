@@ -201,6 +201,16 @@ EOF
   [[ "$(dirname "$session_dir/handoff.md")" == "$session_dir" ]]
 }
 
+@test "audit: moderator budget artifacts are allowed in session root" {
+  local session_dir
+  session_dir="$(create_session_dir deep-design audit-budget)"
+
+  for artifact in budget-policy.json budget-metrics.json budget-summary.json; do
+    echo '{}' > "$session_dir/$artifact"
+    [[ "$(dirname "$session_dir/$artifact")" == "$session_dir" ]]
+  done
+}
+
 @test "audit: unexpected file in session root is flagged" {
   local session_dir
   session_dir="$(create_session_dir deep-design audit-evil)"
@@ -210,7 +220,7 @@ EOF
   [ -f "$session_dir/evil.json" ]
 
   # Define allowed root files
-  local allowed_root_files="session-state.md handoff.md session.lock events.jsonl"
+  local allowed_root_files="session-state.md handoff.md session.lock events.jsonl budget-policy.json budget-metrics.json budget-summary.json"
 
   # Verify evil.json is NOT in the allowed list
   local filename

@@ -23,6 +23,9 @@ Each session creates this directory structure:
 {sessions_root}/{topic}-{timestamp}/
   session.lock                    # Lock file with TTL
   {event-log}.jsonl               # Moderator-only JSONL event log
+  budget-policy.json              # Moderator-owned budget contract source of truth
+  budget-metrics.json             # Moderator-owned current proxy usage snapshot
+  budget-summary.json             # Immutable final budget/calibration summary
   context-brief.json              # Scout output — pre-gathered project/subject context
   synthesis-brief.json            # Produced by moderator from agent files
   composition-request.json        # Optional: written by moderator when composing with another skill
@@ -52,11 +55,202 @@ Session data uses two complementary storage layers:
 - JSONL event logs (append-only, moderator-written)
 - Agent output JSON files (one per agent per phase)
 - `synthesis-brief.json`, `session-state.md`, `handoff.md`
-- `session.lock`, `topics.json`, `composition-request.json`
+- `session.lock`, `budget-policy.json`, `budget-metrics.json`, `budget-summary.json`, `topics.json`, `composition-request.json`
 
 Files are the source of truth during a session. SQLite is the source of truth for cross-session queries (project history, prior session lookup, analytics).
 
 **Migration note:** During the transition period, SKILL.md phases should write session data to both the manifest JSONL file (backward compatibility) and the SQLite sessions table. Once all consumers migrate to SQLite queries, manifest writes become optional.
+
+## Budget Contract
+
+Every session writes a moderator-owned `budget-policy.json` before any agent work begins. This
+file is the source of truth for runtime budget decisions. It is written once during preflight and
+is not rewritten during execution. Usage and active controls are recorded in events and summarized
+into `session-state.md` for recovery.
+
+### Goals
+
+- Keep runtime and output growth bounded without token billing APIs
+- Preserve final positions, synthesis, and required verification work
+- Apply cost controls only at existing moderator barriers
+- Stay backward-compatible with current tier tables and event consumers
+
+### Preflight
+
+At the confirmation gate, the moderator shows:
+
+- the selected tier
+- the policy defaults for that tier
+- a dry-run estimate for core agents, specialists, rounds, model calls, and enabled optional phases
+
+The dry-run estimate is advisory only. Spectra does not have token billing, so no dollar figure is
+treated as enforceable.
+
+### Source-of-Truth File
+
+`{session_dir}/budget-policy.json`
+
+```json
+{
+  "policy_version": "1.0.0",
+  "skill": "deep-design",
+  "tier": "standard",
+  "limits": {
+    "default_core_agents": 6,
+    "max_core_agents": 8,
+    "default_specialists": 0,
+    "max_specialists": 2,
+    "max_active_agents": 10,
+    "included_rounds": 1,
+    "max_rounds": 1,
+    "max_output_kb": 150,
+    "max_wall_seconds": 600,
+    "max_agent_spawns": 30,
+    "max_model_calls": 37,
+    "reserved_finalization_calls": 3
+  },
+  "optional_phases": {
+    "research": false,
+    "composition": true,
+    "verification": true
+  },
+  "model_policy": {
+    "default": "standard",
+    "cheap_phases": ["scout", "discussion", "final-positions", "verification"],
+    "frontier_phases": ["synthesis"],
+    "frontier_requires_approval": true
+  },
+  "planning": {
+    "fixed_model_calls": 4,
+    "final_position_cycles": 1
+  }
+}
+```
+
+### Helper Commands
+
+The moderator uses the deterministic helper in `shared/tools/budget-policy.sh`:
+
+- `bash ~/.claude/skills/shared/tools/budget-policy.sh defaults <skill> <tier>`
+- `bash ~/.claude/skills/shared/tools/budget-policy.sh estimate <skill> <tier> [core] [specialists] [rounds]`
+- `bash ~/.claude/skills/shared/tools/budget-policy.sh evaluate <policy-file> <metrics-file>`
+- `bash ~/.claude/skills/shared/tools/budget-policy.sh check <policy-file> <metrics-file> [--add-agent-spawns N] [--add-model-calls N] [--add-rounds N] [--phase NAME]`
+
+Use `defaults` to materialize `budget-policy.json` from the shared catalog, `estimate` for the
+confirmation-gate dry run, `evaluate` for passive status snapshots, and `check` before a new spawn,
+round, or optional phase would be scheduled.
+
+Materialize the policy atomically:
+
+```bash
+bash ~/.claude/skills/shared/tools/budget-policy.sh defaults <skill> <tier> |
+  bash ~/.spectra/bin/json-write.sh "{session_dir}/budget-policy.json"
+```
+
+Immediately initialize moderator-owned telemetry:
+
+```bash
+bash ~/.claude/skills/shared/tools/budget-metrics.sh init "{session_dir}"
+```
+
+The updater creates `{session_dir}/budget-metrics.json` with torn-write-safe atomic replacement:
+
+```json
+{
+  "agent_spawns": 0,
+  "model_calls": 0,
+  "finalization_model_calls_used": 0,
+  "rounds": 0,
+  "output_kb": 0,
+  "wall_seconds": 0
+}
+```
+
+This snapshot contains observed usage only. Planned additions belong in `check` flags, so a rejected
+action never increments the durable counters. After work actually completes, record it through the
+same serialized updater:
+
+```bash
+# One normal agent/model call completed
+bash ~/.claude/skills/shared/tools/budget-metrics.sh record "{session_dir}" \
+  --add-agent-spawns 1 --add-model-calls 1
+
+# One finalization call completed; it is also part of total model calls
+bash ~/.claude/skills/shared/tools/budget-metrics.sh record "{session_dir}" \
+  --add-model-calls 1 --add-finalization-model-calls 1
+
+# At a checkpoint; add-rounds is used only when a new round completed
+bash ~/.claude/skills/shared/tools/budget-metrics.sh record "{session_dir}" \
+  --add-rounds 1 --set-output-kb "{output_kb}" --set-wall-seconds "{elapsed_seconds}"
+```
+
+The moderator is the sole metrics writer and must serialize updater calls. Atomic replacement
+prevents partial files; it does not merge overlapping read-modify-write operations. Count every
+actual spawn and model call once, including
+Scout, research, synthesis, composition, verification, retries, and replacement agents. Output and
+wall-time values are absolute monotonic gauges. For new sessions,
+`finalization_model_calls_used` is initialized to zero and explicitly incremented with the total call
+at each finalization call site. Older sessions may omit it; reports then leave reserve usage and
+breach status unknown rather than inferring them from total calls.
+
+### Effective Limits
+
+The runtime limit is always:
+
+`effective limit = min(static skill cap, budget policy cap)`
+
+Apply this rule to all flat entries in `limits`, especially:
+
+- `max_core_agents`
+- `max_specialists`
+- `max_active_agents`
+- `included_rounds`
+- `max_rounds`
+- `max_output_kb`
+- `max_wall_seconds`
+- `max_agent_spawns`
+- `max_model_calls`
+- `reserved_finalization_calls`
+
+Skill docs stay authoritative about maximum depth; the policy may only tighten those limits.
+
+### Model Routing Policy
+
+The budget contract also governs model class selection:
+
+- `model_policy.default` is the baseline class for this session
+- `model_policy.cheap_phases` lists phases that should route to the cheap class
+- `model_policy.frontier_phases` lists phases allowed to use the frontier class
+
+When `frontier_requires_approval` is true, the confirmation gate must identify and obtain approval
+for every planned frontier phase. That initial approval covers the displayed dry-run plan; any
+frontier call added later requires fresh approval. This keeps expensive escalation explicit without
+adding a second pause to the normal path.
+
+### Barrier-Only Enforcement
+
+Budget policy is checked only at moderator barriers that already exist:
+
+- confirmation preflight
+- before spawning opening agents
+- before spawning specialists
+- before starting another discussion round
+- after phase transitions when checkpoints are already written
+- before offering composition
+- before finalization and verification
+
+Never kill in-flight agents to satisfy budget policy. If a barrier is crossed and the next action
+would exceed the effective budget, degrade the next step instead.
+
+### Legacy Fallback
+
+If `budget-policy.json` is missing, unreadable, or corrupt:
+
+- continue with the skill's legacy tier behavior
+- emit `context_budget_status` with `action_taken: "logged"`
+- do not block spawns or skip phases based on the missing policy
+
+This fallback is required for backward compatibility and partial-session recovery.
 
 ## Scout Agent — Pre-Session Context Gathering
 
@@ -249,8 +443,8 @@ All agents are spawned as:
 - `run_in_background`: `true` — agents run concurrently
 
 Model selection is skill-specific and tier-dependent. Each SKILL.md defines
-a Model Allocation table. Default: `opus` for analysis-heavy opening phases,
-`sonnet` for discussion, final positions, and synthesis.
+a Model Allocation table, while `budget-policy.json` and `budget-policy.sh`
+define whether a phase should use the cheap, default, or frontier class.
 
 For discussion rounds, **spawn fresh agents** rather than reusing previous-round agents. Each round's agents receive:
 - The topics they're assigned to (from `topics.json`)
@@ -523,22 +717,30 @@ The moderator tracks proxy metrics for context window pressure at every phase tr
 
 | Threshold | Trigger | Action |
 |---|---|---|
-| **Warning** (~60%) | 3+ rounds completed | Log `context_budget_status`, write checkpoint |
-| **Caution** (~75%) | 5+ rounds OR output > tier KB limit | Reduce agents, skip optional phases |
-| **Critical** (~85%) | Metrics substantially exceed caution | Force final-positions, skip remaining discussion |
+| **Warning** (>=60%) | Any tracked metric reaches 60% | Log `context_budget_status`, write checkpoint, tighten estimates |
+| **Caution** (>=80%) | Any tracked metric reaches 80% | Freeze specialists, block optional expansions, cap future rounds |
+| **Critical** (>=100%) | Any tracked metric reaches its hard limit | Force final-positions, preserve finalization reserve, skip remaining discussion |
 | **Emergency** | Compaction detected (SKILL.md sentinel) | Execute emergency shutdown protocol |
 
 #### Tier-Specific Limits
 
-Initial thresholds, subject to calibration after 20+ real sessions:
+Tier limits are read from the matching entry in `shared/schemas/budget-policies.json` and
+materialized into `budget-policy.json`. The effective runtime limit is the minimum of that policy
+cap and the current skill's static cap.
 
-| Tier | Max rounds before caution | Max cumulative output (KB) |
-|---|---|---|
-| Quick | 1 | 50 |
-| Standard | 3 | 150 |
-| Deep | 5 | 300 |
+#### Degradation Levels
 
-**Calibration notice**: Thresholds are **measurement-only** for the first 20 sessions. Emit `context_budget_status` events at every phase transition but do NOT enforce actions (always set `action_taken: "logged"`). After calibrating against real session data, enforcement will be enabled in a future phase.
+Use this ladder when `budget-policy.json` is present and successfully validated:
+
+| Level | Moderator Behavior |
+|---|---|
+| `none` | Proceed normally |
+| `warning` | Log status, write checkpoint, avoid optional expansion |
+| `caution` | Freeze specialists, block optional phases disabled by policy, skip optional follow-ons, tighten next-round scope |
+| `critical` | Stop further discussion, move to final positions, preserve synthesis and required verification using `reserved_finalization_calls` |
+
+The moderator must preserve the reserve for final positions, synthesis, and any required
+verification hook. Do not spend the reserve on additional discussion or specialist expansion.
 
 #### Metric Computation
 
@@ -548,12 +750,70 @@ At each phase transition (after writing the checkpoint), the moderator:
 2. Sums file sizes of all agent output JSON files read during the session
 3. Increments the running agent spawn count
 4. Estimates moderator output from event log file size
-5. Compares metrics against the tier-specific threshold table
+5. Compares metrics against the policy threshold table and effective limits using `budget-policy.sh evaluate`
 6. Emits a `context_budget_status` event (see `event-schemas-base.md`)
 
 #### Integration with Checkpoints
 
 Budget status is checked at the same points where `checkpoint_written` events are emitted (existing checkpoint cadence). The `context_budget_status` event is written immediately after the `checkpoint_written` event at each phase transition.
+
+#### Enforcement Boundaries
+
+Budget controls apply only before new work is scheduled:
+
+- before spawning opening or specialist agents
+- before entering another discussion round
+- before invoking composition
+- before consuming the finalization reserve
+
+When planning one of those actions, use `budget-policy.sh check` first. If `check` rejects the next
+action, degrade the next step rather than scheduling more work.
+
+If a phase is already running, let it finish, process whatever valid outputs arrive, then degrade the
+next step. This avoids killing in-flight agents and keeps event ordering predictable.
+
+### Session Budget Summary
+
+Immediately before `session_end`, refresh `budget-metrics.json` and generate the finalized local
+calibration artifact:
+
+```bash
+bash ~/.claude/skills/shared/tools/budget-report.sh summarize "{session_dir}" \
+  --state complete --quality "{quality}" |
+  bash ~/.spectra/bin/json-write.sh "{session_dir}/budget-summary.json"
+```
+
+`budget-summary.json` joins the materialized policy, preflight plan, observed proxy counters, final and
+highest budget levels, overshoots, blocked actions, activated controls, and finalization-reserve
+usage when phase-aware call counting is available. Otherwise, reserve usage and breach status are
+`null`, while `encroached` only records that total calls crossed the non-finalization ceiling. It
+contains no token or dollar estimates. Summary version 1.1.0 also embeds the exact policy snapshot
+and its canonical SHA-256 fingerprint so later calibration never guesses which limits produced an
+observation. Version 1.0.0 summaries remain readable but are evidence-only for recommendations. Add
+the condensed outcome to `session_end` using the optional `budget_summary` fields in
+`event-schemas-base.md`.
+
+If summary generation fails, log the failure, add a data-quality caveat to the handoff, and continue
+closing the session. A telemetry failure must not discard valid deliberation results. Older sessions
+without budget artifacts remain readable as `legacy` sessions.
+
+Local calibration reports are available without activating SQLite:
+
+```bash
+spectra budget
+spectra budget --skill peer-review --limit 20
+spectra budget --json
+spectra budget calibrate --skill peer-review --tier standard
+spectra budget calibrate --json
+```
+
+Calibration is recommendation-only and never edits `budget-policies.json`. It reads only finalized,
+regular `budget-summary.json` files from complete, Full-quality, caveat-free sessions with valid
+policy and metrics artifacts. Evidence is isolated by skill, tier, and exact policy fingerprint. A
+bucket needs at least 20 eligible sessions spanning seven days. Candidate reductions preserve the
+largest successful observation plus 15% headroom, never fall below the default plan, never increase
+a limit, and leave finalization reserves, agent shape, optional phases, and model routing unchanged.
+See `docs/budget-calibration-trials.md` for the local trial procedure.
 
 ### Emergency Shutdown Protocol
 
@@ -562,10 +822,12 @@ When context pressure reaches critical levels or the SKILL.md compaction sentine
 1. **Detect trigger**: Either proxy metrics reach `critical` threshold, or the SKILL.md compaction sentinel check fails (indicating context was compacted and recovery information may be incomplete)
 2. **Write `emergency_checkpoint` event** with structured `recovery_state` containing all information needed to resume the session (see `event-schemas-base.md`)
 3. **Augment `session-state.md`** with an `## Emergency Shutdown` section documenting the reason, metrics at shutdown, and recovery instructions
-4. **Write `session_end` event** with `quality: "interrupted"`
-5. **Attempt `TeamDelete`** if a team is active — best-effort, do not block on failure
-6. **Write partial handoff** if synthesis data is available (any completed phases produce useful data)
-7. **Clean up**: Delete the session lock file but leave the `.active-{skill}-session` sentinel (for recovery discovery)
+4. **Write `budget-summary.json`** with `--state interrupted --quality interrupted`; continue with
+   a caveat if telemetry finalization fails
+5. **Write `session_end` event** with `quality: "interrupted"`
+6. **Attempt `TeamDelete`** if a team is active — best-effort, do not block on failure
+7. **Write partial handoff** if synthesis data is available (any completed phases produce useful data)
+8. **Clean up**: Delete the session lock file but leave the `.active-{skill}-session` sentinel (for recovery discovery)
 
 The `recovery_state` in the `emergency_checkpoint` event is the primary recovery mechanism. Future sessions or manual recovery can read this structured state to resume from the exact point of interruption.
 
@@ -651,6 +913,9 @@ os.rename(tmp_path, final_path)
 
 ## Statistics
 {Agent count, topics, rounds, compositions, duration}
+
+## Budget Outcome
+{Final/highest budget level, maximum proxy utilization, blocked actions, overshoots, and caveats}
 ```
 
 <!-- markdownlint-enable MD024 -->
@@ -661,6 +926,8 @@ Section details:
 - **Decisions Made / Topics Resolved**: Resolved topics with the resolution method (consensus, escalation, deferred). For decision-board, include concessions and position shifts.
 - **Unresolved / Deferred Items**: The most important section for continuity. Items listed here will be surfaced to agents in future sessions via Prior Session Context injection.
 - **Recommendations Needing Follow-Up**: Actionable checklist items with severity. These are concrete next steps the user should take.
+- **Budget Outcome**: Condensed from `budget-summary.json`; use observable proxy metrics only and
+  explicitly label legacy or incomplete telemetry.
 
 ### Event Logging and Manifest Update
 
@@ -762,14 +1029,18 @@ Skills using the persistence system integrate these steps at standard phase boun
 
 ### Phase Allowlists
 
-Add `session-state.md` and `handoff.md` to directory audit allowlists for ALL phases. These are moderator-only files and must not trigger `security_violation` events.
+Add `session-state.md`, `handoff.md`, `budget-policy.json`, `budget-metrics.json`, and
+`budget-summary.json` to directory audit allowlists for ALL phases. These moderator-only files must
+not trigger `security_violation` events.
 
 ### Session End (Phase 6)
 
-1. Generate `handoff.md` from `synthesis-brief.json` + event log using the atomic write pattern
-2. Write `handoff_written` event to the JSONL log
-3. Set `has_handoff: true` and `session_dirname` (leaf name only) in the manifest entry
-4. Delete `.active-{skill}-session` sentinel
+1. Refresh `budget-metrics.json` and atomically write `budget-summary.json`
+2. Write `session_end` with the compact budget summary; continue with a caveat if telemetry failed
+3. Generate `handoff.md` from `synthesis-brief.json` + event log using the atomic write pattern
+4. Write `handoff_written` event to the JSONL log
+5. Set `has_handoff: true` and `session_dirname` (leaf name only) in the manifest entry
+6. Delete `.active-{skill}-session` sentinel
 
 ### Skill-Specific Overrides
 

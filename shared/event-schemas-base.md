@@ -10,7 +10,7 @@ Every event MUST include these fields:
 |---|---|---|
 | `event_id` | UUID v4 | Unique identifier for deduplication and cross-referencing |
 | `sequence_number` | Integer | Monotonically increasing, starting at 1. No gaps allowed. |
-| `schema_version` | String | Semver (currently `"1.0.0"`) for forward compatibility |
+| `schema_version` | String | Semver (currently `"1.2.0"`) for forward compatibility |
 | `session_id` | String | Links event to the session (matches `session_start.session_id`) |
 | `timestamp` | String | ISO 8601 UTC with millisecond precision (e.g., `"2026-02-28T17:01:00.000Z"`) |
 
@@ -20,14 +20,15 @@ Response events SHOULD include `parent_event_id` referencing the event they resp
 
 Event schemas follow [Semantic Versioning](https://semver.org/):
 
-- **Current version**: `1.1.0`
-- **Minor version bump** (e.g., 1.0.0 to 1.1.0): Additive changes only — new optional fields on existing event types, new event types. Readers MUST ignore unknown fields. Writers MUST NOT remove or rename existing fields.
+- **Current version**: `1.2.0`
+- **Minor version bump** (e.g., 1.1.0 to 1.2.0): Additive changes only — new optional fields on existing event types, new event types. Readers MUST ignore unknown fields. Writers MUST NOT remove or rename existing fields.
 - **Major version bump** (e.g., 1.x to 2.0.0): Breaking changes — removed fields, renamed fields, changed field types or semantics. Readers SHOULD reject events with an unrecognized major version rather than silently misinterpreting data.
 
 ### Compatibility Contract
 
 - All events carry `schema_version` in their metadata (see above)
 - Consumers reading events MUST tolerate unknown fields (forward compatibility)
+- Readers and validators that only understand `1.0.0` or `1.1.0` remain compatible with older logs; `1.2.0` adds optional fields only
 - Consumers MAY reject events whose major version exceeds their known maximum
 - The `schema_migrations` table in `~/.spectra/spectra.db` tracks which schema version the local installation expects (see `shared/tools/db-utils.sh`)
 
@@ -37,6 +38,7 @@ Event schemas follow [Semantic Versioning](https://semver.org/):
 |---|---|---|
 | 1.0.0 | 2026-02-28 | Initial schema — all base event types |
 | 1.1.0 | 2026-03-01 | Added context_budget_status, emergency_checkpoint events; quality_kpis on session_end; interrupted quality value |
+| 1.2.0 | 2026-08-27 | Added optional budget contract, dry-run estimate, final budget summary, and enforced budget control state |
 
 ## Common Event Types
 
@@ -48,16 +50,82 @@ First event in every session. Exactly one per file.
 {
   "event_id": "uuid",
   "sequence_number": 1,
-  "schema_version": "1.0.0",
+  "schema_version": "1.2.0",
   "type": "session_start",
   "timestamp": "ISO-8601",
   "session_id": "{skill}-{topic}-{timestamp}",
   "agents": ["agent-1", "agent-2", "..."],
-  "tier": "quick | standard | deep"
+  "tier": "quick | standard | deep",
+  "budget_contract": {
+    "policy_file": "budget-policy.json",
+    "policy_version": "1.0.0",
+    "skill": "deep-design",
+    "tier": "standard",
+    "limits": {
+      "default_core_agents": 6,
+      "max_core_agents": 8,
+      "default_specialists": 0,
+      "max_specialists": 2,
+      "max_active_agents": 10,
+      "included_rounds": 1,
+      "max_rounds": 1,
+      "max_output_kb": 150,
+      "max_wall_seconds": 600,
+      "max_agent_spawns": 30,
+      "max_model_calls": 37,
+      "reserved_finalization_calls": 3
+    },
+    "optional_phases": {
+      "research": false,
+      "composition": true,
+      "verification": true
+    },
+    "model_policy": {
+      "default": "standard",
+      "cheap_phases": ["scout", "discussion", "final-positions", "verification"],
+      "frontier_phases": ["synthesis"],
+      "frontier_requires_approval": true
+    },
+    "planning": {
+      "fixed_model_calls": 4,
+      "final_position_cycles": 1
+    }
+  },
+  "dry_run_estimate": {
+    "planned_core_agents": 6,
+    "planned_specialists": 0,
+    "planned_active_agents": 6,
+    "planned_rounds": 1,
+    "planned_agent_spawns": 18,
+    "planned_model_calls": 25,
+    "reserved_finalization_calls": 3,
+    "estimated_wall_seconds": 600,
+    "estimated_output_kb": 150,
+    "optional_phases": {
+      "research": false,
+      "composition": true,
+      "verification": true
+    }
+  }
 }
 ```
 
 Additional skill-specific fields are added by each skill (e.g., `document` and `document_type` for deep-design, `decision_question` and `options` for decision-board).
+
+Optional shared additions in `1.2.0`:
+
+| Field | Type | Description |
+|---|---|---|
+| `budget_contract` | Object | Summary of the moderator-owned budget contract used for this session |
+| `budget_contract.policy_file` | String | Contract filename, always `budget-policy.json` when present |
+| `budget_contract.policy_version` | String | Budget policy schema version |
+| `budget_contract.skill` | String | Skill name used to materialize the contract |
+| `budget_contract.tier` | String | Tier name used to materialize the contract |
+| `budget_contract.limits` | Object | Flat limit object copied from `budget-policy.json` after applying the current skill/tier defaults |
+| `budget_contract.optional_phases` | Object | Boolean policy toggles for optional phases |
+| `budget_contract.model_policy` | Object | Cheap/default/frontier routing policy for this session |
+| `budget_contract.planning` | Object | Deterministic planning fields used by `budget-policy.sh estimate` |
+| `dry_run_estimate` | Object | Advisory preflight estimate shown at confirmation |
 
 ### `phase_transition`
 
@@ -67,7 +135,7 @@ Records state machine transitions between session phases.
 {
   "event_id": "uuid",
   "sequence_number": 4,
-  "schema_version": "1.0.0",
+  "schema_version": "1.2.0",
   "type": "phase_transition",
   "timestamp": "ISO-8601",
   "from": "PHASE_A",
@@ -120,7 +188,7 @@ Final summary event written by the moderator after synthesis agents complete.
 {
   "event_id": "uuid",
   "sequence_number": 16,
-  "schema_version": "1.0.0",
+  "schema_version": "1.2.0",
   "type": "session_end",
   "timestamp": "ISO-8601",
   "quality": "Full | Partial | Minimal | interrupted",
@@ -129,6 +197,20 @@ Final summary event written by the moderator after synthesis agents complete.
     "completion_rate": 0.90,
     "phase_completion_rate": 1.0,
     "security_violations_count": 0
+  },
+  "budget_summary": {
+    "file": "budget-summary.json",
+    "summary_version": "1.1.0",
+    "state": "complete | interrupted | active | legacy | invalid",
+    "final_level": "none | warning | caution | critical | null",
+    "highest_level_seen": "none | warning | caution | critical | null",
+    "max_ratio": 0.94,
+    "overshoot_fields": [],
+    "blocked_actions_count": 1,
+    "finalization_reserve_usage_known": true,
+    "finalization_reserve_used": 2,
+    "finalization_reserve_breached": false,
+    "legacy_fallback_used": false
   }
 }
 ```
@@ -142,6 +224,13 @@ The `quality_kpis` object is optional (additive, schema 1.1.0). Each skill exten
 | `completion_rate` | `count(agent_complete WHERE status=completed) / count(agent_complete)` | Event log | 0/0 = null |
 | `phase_completion_rate` | `count(phase_transition) / phases_planned` | Event log + session config | Interrupted: use phases completed at interruption |
 | `security_violations_count` | `count(security_violation)` | Event log | 0 is expected |
+
+The `budget_summary` object is optional (additive, schema 1.2.0). It is a compact event-log index
+into the full `budget-summary.json` artifact; do not duplicate the entire policy or observed metrics
+inside `session_end`. When phase-aware finalization call counting is unavailable, set
+`finalization_reserve_usage_known` to `false` and both `finalization_reserve_used` and
+`finalization_reserve_breached` to `null`; never infer a breach from total calls alone. Budget
+summary 1.1.0 adds an exact policy snapshot and fingerprint for calibration; 1.0.0 remains readable.
 
 ### `feedback`
 
@@ -288,14 +377,15 @@ Records that a session handoff file was generated. Counts are derived from `synt
 
 ### `context_budget_status`
 
-Emitted at every phase transition to track proxy metrics for context window pressure. Part of the measurement-only context budget monitoring system (see `shared/orchestration.md` > Context Budget Monitoring).
+Emitted at every phase transition to track proxy metrics and enforced session budgets (see
+`shared/orchestration.md` > Context Budget Monitoring).
 
 ```json
 {
   "event_id": "uuid",
   "session_id": "session-id",
   "sequence_number": 9,
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "type": "context_budget_status",
   "timestamp": "ISO-8601",
   "phase": "discussion_round_3",
@@ -303,11 +393,39 @@ Emitted at every phase transition to track proxy metrics for context window pres
     "rounds_completed": 3,
     "cumulative_output_kb": 127.4,
     "agents_spawned": 15,
+    "model_calls_used": 18,
+    "elapsed_seconds": 420,
     "moderator_output_kb": 42.1
   },
   "active_threshold": "none | warning | caution | critical",
   "tier_limits": { "max_rounds": 5, "max_output_kb": 300 },
-  "action_taken": "logged | checkpoint_written | reduce_agents | force_final"
+  "action_taken": "logged | checkpoint_written | skip_optional | force_final | block",
+  "budget_snapshot": {
+    "remaining": {
+      "agent_spawns": 2,
+      "model_calls": 4,
+      "rounds": 0,
+      "output_kb": 22.6,
+      "wall_seconds": 180,
+      "model_calls_after_finalization_reserve": 1
+    },
+    "ratios": {
+      "agent_spawns": 0.9,
+      "model_calls": 0.8,
+      "rounds": 1.0,
+      "output_kb": 0.85,
+      "wall_seconds": 0.7
+    }
+  },
+  "controls_active": ["skip_optional", "preserve_finalization_reserve"],
+  "next_action": "force_final_positions",
+  "proposed_action": {
+    "phase": "discussion",
+    "add_agent_spawns": 0,
+    "add_model_calls": 1,
+    "add_rounds": 1,
+    "allowed": false
+  }
 }
 ```
 
@@ -317,10 +435,18 @@ Emitted at every phase transition to track proxy metrics for context window pres
 | `metrics.rounds_completed` | Integer | Number of discussion/debate rounds completed so far |
 | `metrics.cumulative_output_kb` | Float | Total size of all agent output JSON files read by moderator (KB) |
 | `metrics.agents_spawned` | Integer | Total number of agents spawned across all phases |
+| `metrics.model_calls_used` | Integer | Total observable model calls used across all phases |
+| `metrics.elapsed_seconds` | Number | Wall-clock seconds elapsed since session start |
 | `metrics.moderator_output_kb` | Float | Estimated size of moderator's own output (event log + checkpoints) in KB |
 | `active_threshold` | String | Current threshold level: `none`, `warning`, `caution`, or `critical` |
 | `tier_limits` | Object | The tier-specific limits being measured against |
-| `action_taken` | String | Action taken at this threshold level (measurement-only for first 20 sessions) |
+| `action_taken` | String | Action taken at this threshold level (`logged`, `checkpoint_written`, `skip_optional`, `force_final`, or `block`) |
+| `budget_snapshot` | Object | Optional 1.2.0 snapshot of remaining budget after the current phase |
+| `budget_snapshot.remaining` | Object | Remaining capacity reported by `budget-policy.sh evaluate` |
+| `budget_snapshot.ratios` | Object | Utilization ratios reported by `budget-policy.sh evaluate` |
+| `controls_active` | Array[String] | Optional set of budget controls currently active |
+| `next_action` | String | Optional moderator action expected at the next barrier |
+| `proposed_action` | Object | Optional summary of the next planned action checked with `budget-policy.sh check` |
 
 ### `emergency_checkpoint`
 

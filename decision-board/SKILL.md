@@ -11,6 +11,10 @@ Orchestrates a team of expert agents who conduct a structured, multi-perspective
 
 Debates operate in one of three cost tiers (Quick, Standard, Deep) auto-selected based on decision complexity, with user override.
 
+At the confirmation gate, show the preflight budget defaults and dry-run estimate from
+`budget-policy.json`. This skill's tier tables remain hard ceilings; the runtime limit is the minimum
+of those ceilings and the shared policy caps.
+
 You (the main Claude instance) act as the **moderator** throughout. You drive every phase directly — there is no coordinator agent.
 
 ### Compaction Recovery
@@ -27,11 +31,14 @@ If your context seems incomplete (you don't remember the session setup, agents, 
 
 After recovering or during any normal phase transition:
 
-1. Count completed rounds from event log (`bash ~/.claude/skills/shared/tools/jsonl-utils.sh count-type {event_log} phase_transition`)
-2. Measure cumulative output: sum file sizes of all agent output JSON files read during the session
-3. Compare against tier thresholds (see `~/.claude/skills/shared/orchestration.md` > Context Budget Monitoring)
-4. Emit `context_budget_status` event with current metrics and active threshold level
-5. If CRITICAL or above after compaction: execute emergency shutdown protocol (see `~/.claude/skills/shared/orchestration.md` > Emergency Shutdown Protocol)
+1. Initialize `budget-metrics.json` once with `budget-metrics.sh init`, then use `record` after every actual spawn, model call, completed round, and checkpoint; finalization increments must also increment total model calls
+2. Count completed rounds from event log (`bash ~/.claude/skills/shared/tools/jsonl-utils.sh count-type {event_log} phase_transition`)
+3. Measure cumulative output: sum file sizes of all agent output JSON files read during the session
+4. Read `budget-policy.json` if present and compute effective limits as `min(static skill cap, policy cap)`
+5. Compare against the shared budget contract using `budget-policy.sh evaluate` or `budget-policy.sh check` at the next barrier (see `~/.claude/skills/shared/orchestration.md`)
+6. Emit `context_budget_status` with current metrics, remaining budget snapshot, and any active controls
+7. If the policy is missing or corrupt, fall back to legacy tier behavior and log only
+8. If CRITICAL or above after compaction: execute emergency shutdown protocol (see `~/.claude/skills/shared/orchestration.md` > Emergency Shutdown Protocol)
 
 ### Success Metrics
 
@@ -151,6 +158,9 @@ Auto-suggest based on decision signals:
 
 User can always override at the confirmation gate.
 
+The confirmation view should include the dry-run estimate from `budget-policy.sh estimate` and the
+materialized policy from `budget-policy.sh defaults`.
+
 ### Cost Optimization Strategies
 
 - **Round summarization** (active) — moderator produces condensed ~1000-token
@@ -158,6 +168,8 @@ User can always override at the confirmation gate.
   x rounds^2) growth to O(agents x rounds)
 - Consensus-based early termination — skip further debate on options with no remaining advocates
 - Lazy specialist activation in Deep tier — start with core agents, activate specialists only if positioning reveals domain-specific concerns
+- Budget-policy enforcement at existing barriers only — before new spawns, before another round, and before composition; never kill in-flight agents
+- Model routing follows the shared `model_policy`, with frontier restricted to high-value synthesis or arbitration and approval when configured
 
 ## Security Model
 
@@ -957,7 +969,7 @@ You may use WebSearch for targeted research relevant to your task. Constraints:
    Both agents run in parallel.
 
 7. **Post-synthesis directory audit**: After both synthesis agents complete, the moderator validates the session directory against the file-write allowlist:
-   - **Allowed files**: `decision-events.jsonl`, `context-brief.json`, `synthesis-brief.json`, `session.lock`, `decision-record.md`, `debate-log.md`, `composition-request.json`, `session-state.md`, `handoff.md`
+   - **Allowed files**: `decision-events.jsonl`, `context-brief.json`, `synthesis-brief.json`, `session.lock`, `decision-record.md`, `debate-log.md`, `composition-request.json`, `session-state.md`, `handoff.md`, `budget-policy.json`, `budget-metrics.json`, `budget-summary.json`
    - **Allowed directories and contents**: `opening/*.json`, `discussion/round-*/*.json`, `discussion/round-*/round-brief.json`, `final-positions/*.json`
    - Any unexpected file triggers a `security_violation` event and user warning
    - Offending files are NOT included in the final output presentation
@@ -975,7 +987,10 @@ After synthesis artifacts are written, run the shared verification protocol from
 
 Skip this step for Quick tier sessions.
 
-8. **Write `session_end` event** to `decision-events.jsonl` with final metrics (quality computed per formula in event-schemas.md, using metrics from the synthesis brief and synthesis agents' return summaries).
+8. **Finalize budget telemetry**: Refresh `budget-metrics.json` and write `budget-summary.json` per
+   the shared Session Budget Summary protocol. On failure, record a caveat and continue.
+
+9. **Write `session_end` event** to `decision-events.jsonl` with final metrics (quality computed per formula in event-schemas.md, using metrics from the synthesis brief and synthesis agents' return summaries). Include the compact `budget_summary` fields.
 
    After computing quality, compute quality KPIs from the event log:
    - `completion_rate`: count `agent_complete` events with `status=completed` / total `agent_complete` events

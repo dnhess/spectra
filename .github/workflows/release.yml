@@ -54,6 +54,7 @@ jobs:
             --exclude='CODEOWNERS' \
             --exclude='LICENSE' \
             bin/ \
+            adapters/ \
             shared/ \
             deep-design/ \
             decision-board/ \
@@ -71,6 +72,10 @@ jobs:
           # Verify expected structure exists
           test -f /tmp/validate/bin/spectra
           test -f /tmp/validate/bin/json-write.sh
+          test -x /tmp/validate/adapters/codex/codex-runtime.sh
+          test -f /tmp/validate/adapters/codex/codex-runtime.py
+          test -f /tmp/validate/adapters/codex/codex-executor.py
+          test -f /tmp/validate/shared/schemas/peer-review-opening.schema.json
           test -d /tmp/validate/shared
           test -d /tmp/validate/deep-design
           test -d /tmp/validate/decision-board

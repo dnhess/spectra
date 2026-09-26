@@ -28,7 +28,9 @@ Agents are told the exact path they should write to (e.g., `{session_dir}/openin
 - Opening round: `opening/{agent-name}.json`
 - Discussion rounds: `discussion/round-{n}/{agent-name}.json`
 - Final positions: `final-positions/{agent-name}.json`
-- Only the moderator writes: `{event-log}.jsonl`, `synthesis-brief.json`, `topics.json`, `session.lock`, `session-state.md`, `handoff.md`
+- Only the moderator writes: `{event-log}.jsonl`, `synthesis-brief.json`, `topics.json`,
+  `session.lock`, `session-state.md`, `handoff.md`, `budget-policy.json`,
+  `budget-metrics.json`, `budget-summary.json`
 
 ### Layer 2: Post-Phase Directory Audit
 
@@ -45,7 +47,9 @@ Before and after each major phase (opening, discussion, final positions), the mo
 | Discussion round N | `discussion/round-{n}/{agent-name}.json` for each spawned agent |
 | Final positions | `final-positions/{agent-name}.json` for each spawned agent |
 
-**Persistence files**: `session-state.md` and `handoff.md` are allowed in ALL phases. These are written only by the moderator and must appear in directory audit allowlists for every phase.
+**Moderator persistence files**: `session-state.md`, `handoff.md`, `budget-policy.json`,
+`budget-metrics.json`, and `budget-summary.json` are allowed in ALL phases. These are written only
+by the moderator and must appear in directory audit allowlists for every phase.
 
 **SQLite WAL sidecar files**: `spectra.db-wal` and `spectra.db-shm` may appear alongside `spectra.db` in `~/.spectra/`. These are standard SQLite WAL mode artifacts and should not be flagged as security violations during directory audits.
 

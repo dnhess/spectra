@@ -17,6 +17,7 @@ readonly GITHUB_REPO="dnhess/spectra"
 
 # Known skills (update when adding new skills)
 readonly KNOWN_SKILLS=(shared deep-design decision-board peer-review trust-layer coherence-monitor)
+readonly SESSION_SKILLS=(deep-design decision-board peer-review trust-layer coherence-monitor)
 
 # --- Logging ---
 
@@ -161,6 +162,10 @@ install_bin_files() {
     cp "$extract_dir/bin/json-write.sh" "$BIN_DIR/json-write.sh"
     chmod +x "$BIN_DIR/json-write.sh"
   fi
+  if [[ -f "$extract_dir/bin/gate.sh" ]]; then
+    cp "$extract_dir/bin/gate.sh" "$BIN_DIR/gate.sh"
+    chmod +x "$BIN_DIR/gate.sh"
+  fi
   rm -rf "${extract_dir:?}/bin"
 }
 
@@ -246,7 +251,7 @@ settings_backup() {
 
 get_spectra_permissions() {
   cat <<'PERMS'
-["Bash(mkdir -p ~/.spectra/sessions/*)","Bash(bash ~/.spectra/bin/json-write.sh *)","Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)","Bash(bash ~/.claude/skills/shared/tools/db-utils.sh *)","Write(~/.spectra/sessions/**)","Read(~/.spectra/sessions/**)","Glob(~/.spectra/sessions/**)","Write(~/.spectra/.active-*)"]
+["Bash(mkdir -p ~/.spectra/sessions/*)","Bash(bash ~/.spectra/bin/json-write.sh *)","Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)","Bash(bash ~/.claude/skills/shared/tools/db-utils.sh *)","Bash(bash ~/.claude/skills/shared/tools/budget-policy.sh *)","Bash(bash ~/.claude/skills/shared/tools/budget-metrics.sh *)","Bash(bash ~/.claude/skills/shared/tools/budget-report.sh *)","Write(~/.spectra/sessions/**)","Read(~/.spectra/sessions/**)","Glob(~/.spectra/sessions/**)","Write(~/.spectra/.active-*)"]
 PERMS
 }
 
@@ -393,7 +398,7 @@ verify_link_health() {
   done
 
   # Check session directories are writable
-  for skill in deep-design decision-board peer-review; do
+  for skill in "${SESSION_SKILLS[@]}"; do
     local dir="$SESSIONS_DIR/$skill"
     if [[ -d "$dir" ]] && [[ ! -w "$dir" ]]; then
       log_warn "Smoke test: $dir not writable"
@@ -463,12 +468,12 @@ cmd_install() {
   fi
 
   # Create session directories
-  for skill in deep-design decision-board peer-review; do
+  for skill in "${SESSION_SKILLS[@]}"; do
     mkdir -p "$SESSIONS_DIR/$skill"
   done
 
   # Migration compatibility symlinks
-  for skill in deep-design decision-board peer-review; do
+  for skill in "${SESSION_SKILLS[@]}"; do
     local old_path="$CLAUDE_HOME/${skill}-sessions"
     if [[ ! -e "$old_path" ]]; then
       ln -sfn "$SESSIONS_DIR/$skill" "$old_path"
@@ -623,7 +628,7 @@ cmd_uninstall() {
   remove_spectra_symlinks
 
   # Remove compat symlinks
-  for skill in deep-design decision-board peer-review; do
+  for skill in "${SESSION_SKILLS[@]}"; do
     local compat="$CLAUDE_HOME/${skill}-sessions"
     if [[ -L "$compat" ]]; then
       local target
@@ -682,7 +687,7 @@ cmd_link() {
   if [[ ! -e "$BIN_DIR/spectra" ]]; then
     log_info "Bootstrapping ~/.spectra for dev setup..."
     mkdir -p "$SPECTRA_HOME"/{skills,sessions,backups,bin}
-    for skill in deep-design decision-board peer-review; do
+    for skill in "${SESSION_SKILLS[@]}"; do
       mkdir -p "$SESSIONS_DIR/$skill"
     done
     [[ -f "$VERSION_FILE" ]] || echo "$SPECTRA_VERSION" > "$VERSION_FILE"
@@ -690,6 +695,9 @@ cmd_link() {
     ln -sfn "$repo_path/bin/spectra" "$BIN_DIR/spectra"
     if [[ -f "$repo_path/bin/json-write.sh" ]]; then
       ln -sfn "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+    fi
+    if [[ -f "$repo_path/bin/gate.sh" ]]; then
+      ln -sfn "$repo_path/bin/gate.sh" "$BIN_DIR/gate.sh"
     fi
     # Add to PATH via ~/.local/bin
     mkdir -p "$HOME/.local/bin"
@@ -737,6 +745,9 @@ print()
   ln -sfn "$repo_path/bin/spectra" "$BIN_DIR/spectra"
   if [[ -f "$repo_path/bin/json-write.sh" ]]; then
     ln -sfn "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
+  fi
+  if [[ -f "$repo_path/bin/gate.sh" ]]; then
+    ln -sfn "$repo_path/bin/gate.sh" "$BIN_DIR/gate.sh"
   fi
   log_success "Linked CLI to repo"
 
@@ -812,6 +823,11 @@ cmd_unlink() {
           cp "$repo_path/bin/json-write.sh" "$BIN_DIR/json-write.sh"
           chmod +x "$BIN_DIR/json-write.sh"
         fi
+        if [[ -f "$repo_path/bin/gate.sh" ]]; then
+          rm -f "$BIN_DIR/gate.sh"
+          cp "$repo_path/bin/gate.sh" "$BIN_DIR/gate.sh"
+          chmod +x "$BIN_DIR/gate.sh"
+        fi
       fi
     fi
   fi
@@ -871,7 +887,7 @@ cmd_status() {
 
   echo ""
   echo "  Sessions:"
-  for skill in deep-design decision-board peer-review; do
+  for skill in "${SESSION_SKILLS[@]}"; do
     local dir="$SESSIONS_DIR/$skill"
     if [[ -d "$dir" ]]; then
       local size
@@ -975,7 +991,7 @@ print(len(missing))
   fi
 
   # Session directories
-  for skill in deep-design decision-board peer-review; do
+  for skill in "${SESSION_SKILLS[@]}"; do
     local dir="$SESSIONS_DIR/$skill"
     if [[ -d "$dir" ]] && [[ -w "$dir" ]]; then
       log_success "$skill session directory OK"
@@ -1009,7 +1025,7 @@ print(len(missing))
   fi
 
   # Compatibility symlinks
-  for skill in deep-design decision-board peer-review; do
+  for skill in "${SESSION_SKILLS[@]}"; do
     local compat="$CLAUDE_HOME/${skill}-sessions"
     if [[ -L "$compat" ]]; then
       # Check if any active sessions exist
@@ -1106,6 +1122,408 @@ cmd_backup() {
   esac
 }
 
+cmd_budget() {
+  require_installed
+
+  local report_tool="$SKILLS_DIR/shared/tools/budget-report.sh"
+  local current_mode
+  current_mode="$(cat "$MODE_FILE" 2>/dev/null || echo "release")"
+  if [[ "$current_mode" == "dev" ]] && [[ -f "$SPECTRA_HOME/dev-repo" ]]; then
+    local dev_repo
+    dev_repo="$(cat "$SPECTRA_HOME/dev-repo")"
+    report_tool="$dev_repo/shared/tools/budget-report.sh"
+  fi
+  if [[ ! -x "$report_tool" ]]; then
+    log_error "Budget report tool not found or not executable: $report_tool"
+    log_info "Run 'spectra update' or relink the development repository."
+    exit 1
+  fi
+
+  if [[ "${1:-}" == "calibrate" ]]; then
+    shift
+    bash "$report_tool" calibrate "$SESSIONS_DIR" "$@"
+  else
+    bash "$report_tool" report "$SESSIONS_DIR" "$@"
+  fi
+}
+
+# --- Runtime adapters ---
+
+runtime_adapter_path() {
+  local runtime="$1"
+  local current_mode adapter_base
+
+  case "$runtime" in
+    codex) ;;
+    *)
+      log_error "Unknown runtime: $runtime"
+      log_info "Available runtimes: codex"
+      return 1
+      ;;
+  esac
+
+  current_mode="$(cat "$MODE_FILE" 2>/dev/null || echo "release")"
+  adapter_base="$SKILLS_DIR"
+  if [[ "$current_mode" == "dev" ]]; then
+    local dev_repo
+    dev_repo="$(cat "$SPECTRA_HOME/dev-repo" 2>/dev/null || echo "")"
+    if [[ -z "$dev_repo" || ! -d "$dev_repo" ]]; then
+      log_error "Dev runtime repository is unavailable: ${dev_repo:-not configured}"
+      return 1
+    fi
+    adapter_base="$dev_repo"
+  fi
+
+  echo "$adapter_base/adapters/codex/codex-runtime.sh"
+}
+
+runtime_has_option() {
+  local option="$1"
+  shift
+  local argument
+  for argument in "$@"; do
+    case "$argument" in
+      "$option"|"$option"=*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+cmd_runtime() {
+  local runtime="${1:-}"
+
+  if [[ "$runtime" == "list" ]]; then
+    echo "Available runtimes:"
+    echo "  codex"
+    return 0
+  fi
+
+  require_installed
+
+  if [[ -z "$runtime" ]]; then
+    log_error "Usage: spectra runtime <list|codex> [capabilities|doctor|validate|render|dry-run|inspect-context|preview|execute]"
+    exit 1
+  fi
+  shift
+
+  local adapter
+  adapter="$(runtime_adapter_path "$runtime")" || exit 1
+  if [[ ! -x "$adapter" ]]; then
+    log_error "Runtime adapter not found or not executable: $adapter"
+    log_info "Run 'spectra update' or relink the development repository."
+    exit 1
+  fi
+
+  local action="${1:-}"
+  case "$action" in
+    capabilities|doctor)
+      [[ "$#" -eq 1 ]] || { log_error "Usage: spectra runtime $runtime $action"; exit 1; }
+      ;;
+    validate|render)
+      [[ "$#" -eq 2 ]] || { log_error "Usage: spectra runtime $runtime $action <plan>"; exit 1; }
+      ;;
+    dry-run)
+      [[ "$#" -ge 2 ]] || { log_error "Usage: spectra runtime $runtime dry-run <plan> [--out path]"; exit 1; }
+      if [[ "$#" -gt 2 ]] && [[ "$#" -ne 4 || "${3:-}" != "--out" ]]; then
+        log_error "Usage: spectra runtime $runtime dry-run <plan> [--out path]"
+        exit 1
+      fi
+      ;;
+    inspect-context)
+      if ! { [[ "$#" -ge 2 ]] && runtime_has_option --codex-bin "$@"; }; then
+        log_error "Usage: spectra runtime $runtime inspect-context --codex-bin <path>"
+        exit 1
+      fi
+      ;;
+    preview)
+      if ! { [[ "$#" -ge 2 ]] &&
+        runtime_has_option --workspace-root "$@" &&
+        runtime_has_option --session-root "$@" &&
+        runtime_has_option --codex-bin "$@" &&
+        runtime_has_option --codex-home "$@"; }; then
+        log_error "Usage: spectra runtime $runtime preview <plan> --workspace-root <path> --session-root <path> --codex-bin <path> --codex-home <path> [--max-concurrency 1|2]"
+        exit 1
+      fi
+      ;;
+    execute)
+      if ! { [[ "$#" -ge 2 ]] &&
+        runtime_has_option --workspace-root "$@" &&
+        runtime_has_option --session-root "$@" &&
+        runtime_has_option --codex-bin "$@" &&
+        runtime_has_option --codex-home "$@" &&
+        runtime_has_option --approve "$@"; }; then
+        log_error "Usage: spectra runtime $runtime execute <plan> --workspace-root <path> --session-root <path> --codex-bin <path> --codex-home <path> --approve <token> [--max-concurrency 1|2]"
+        exit 1
+      fi
+      ;;
+    *)
+      log_error "Unknown $runtime runtime command: ${action:-missing}"
+      log_info "Available commands: capabilities, doctor, validate, render, dry-run, inspect-context, preview, execute"
+      exit 1
+      ;;
+  esac
+
+  bash "$adapter" "$@"
+}
+
+cmd_how() {
+  cat <<'EOF'
+Spectra CLI does not run deliberation. Install the plugin, then talk to the host.
+
+Claude Code
+  /plugin marketplace add dnhess/spectra
+  /plugin install spectra@spectra
+  Then: Use Spectra to debate whether we require MFA.
+
+Codex / Astra / Astro
+  Enable the Spectra plugin from this repo's marketplace, or copy
+  plugin/skills/spectra to ~/.agents/skills/spectra
+  Then invoke $spectra
+
+Workflows: deep-design, decision-board, peer-review, trust-layer, coherence-monitor.
+
+Hermes
+  Copy plugin/skills/spectra into your skills directory.
+
+Do not copy the original Claude Code SKILL.md tree into Codex.
+EOF
+}
+
+cmd_run_usage() {
+  log_error "Usage: spectra run <skill> [--host claude|codex|astra|astro|hermes] [--tier quick|standard|deep] [--topic slug]"
+}
+
+is_session_skill() {
+  local candidate="$1" skill
+  for skill in "${SESSION_SKILLS[@]}"; do
+    [[ "$skill" == "$candidate" ]] && return 0
+  done
+  return 1
+}
+
+normalize_run_host() {
+  case "$1" in
+    claude|claude-code) echo "claude" ;;
+    astra|astro|gpt-6|gpt6|gpt-6-astra) echo "astra" ;;
+    codex) echo "codex" ;;
+    hermes) echo "hermes" ;;
+    *) echo "" ;;
+  esac
+}
+
+astra_skill_pack() {
+  local here root
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  root="$(cd "$here/.." && pwd)"
+  if [[ -f "$root/plugin/skills/spectra/SKILL.md" ]]; then
+    printf '%s\n' "$root/plugin/skills/spectra"
+    return 0
+  fi
+  if [[ -f "$root/adapters/astra/SKILL.md" ]]; then
+    printf '%s\n' "$root/adapters/astra"
+    return 0
+  fi
+  if [[ -f "$SPECTRA_HOME/adapters/astra/SKILL.md" ]]; then
+    printf '%s\n' "$SPECTRA_HOME/adapters/astra"
+    return 0
+  fi
+  return 1
+}
+
+install_astra_host_skill() {
+  local src dest
+  src="$(astra_skill_pack)" || {
+    log_error "Astra skill pack not found. Run spectra from a Spectra checkout."
+    return 1
+  }
+  dest="$HOME/.agents/skills/spectra"
+  mkdir -p "$HOME/.agents/skills"
+  ln -sfn "$src" "$dest"
+  log_info "Linked Astra skill: $dest -> $src"
+}
+
+cmd_run() {
+  local skill="${1:-}"
+  if [[ -z "$skill" ]]; then
+    cmd_run_usage
+    exit 1
+  fi
+  shift
+
+  require_installed
+
+  if ! is_session_skill "$skill"; then
+    log_error "Unknown skill: $skill"
+    log_info "Valid skills: ${SESSION_SKILLS[*]}"
+    exit 1
+  fi
+
+  local host="claude" topic="session" tier="quick"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --host)
+        [[ $# -ge 2 ]] || { cmd_run_usage; exit 1; }
+        host="$2"
+        shift 2
+        ;;
+      --topic)
+        [[ $# -ge 2 ]] || { cmd_run_usage; exit 1; }
+        topic="$2"
+        shift 2
+        ;;
+      --tier)
+        [[ $# -ge 2 ]] || { cmd_run_usage; exit 1; }
+        tier="$2"
+        shift 2
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        cmd_run_usage
+        exit 1
+        ;;
+    esac
+  done
+
+  local normalized_host
+  normalized_host="$(normalize_run_host "$host")"
+  if [[ -z "$normalized_host" ]]; then
+    log_error "Unknown host: $host"
+    cmd_run_usage
+    exit 1
+  fi
+
+  case "$tier" in
+    quick|standard|deep) ;;
+    *)
+      log_error "Unknown tier: $tier"
+      cmd_run_usage
+      exit 1
+      ;;
+  esac
+
+  if [[ ! "$topic" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]]; then
+    log_error "Topic must be a short slug (letters, numbers, dot, underscore, hyphen)."
+    exit 1
+  fi
+
+  case "$normalized_host" in
+    astra)
+      install_astra_host_skill || exit 1
+      ;;
+    hermes)
+      log_error "Hermes does not load Claude Code skills yet."
+      log_error "Saying \"use Spectra\" will not resolve a Spectra skill."
+      log_info "Use Claude Code or Astra, or run: spectra how"
+      exit 1
+      ;;
+    codex)
+      log_error "Codex is not a skill host."
+      log_error "The Codex adapter is approval-gated Quick peer-review only, and execute is fail-closed until clean-host attestation passes."
+      log_info "For Astra/GPT-6 as moderator, use: spectra run <skill> --host astra"
+      log_info "Inspect with: spectra runtime codex capabilities"
+      exit 1
+      ;;
+  esac
+
+  local ts session_dir session_id ttl
+  ts="$(date +%Y%m%dT%H%M%S)"
+  session_id="${skill}-${topic}-${ts}"
+  session_dir="$SESSIONS_DIR/${skill}/${topic}-${ts}"
+  case "$tier" in
+    quick) ttl=15 ;;
+    standard) ttl=30 ;;
+    deep) ttl=60 ;;
+  esac
+
+  mkdir -p "$session_dir"/{opening,discussion,final-positions}
+
+  python3 - "$session_dir" "$session_id" "$skill" "$tier" "$ttl" "$normalized_host" "$topic" <<'PY'
+import json, os, sys
+from datetime import datetime, timezone
+
+session_dir, session_id, skill, tier, ttl, host, topic = sys.argv[1:8]
+now = datetime.now(timezone.utc).isoformat()
+if host == "astra":
+    prompt = (
+        f"$spectra {skill} topic={topic} session_dir={session_dir}. "
+        "You are the Spectra moderator; spawn Codex subagents per references/protocol.md."
+    )
+    waiting = f"Waiting for Astra/Codex to load $spectra for {skill}."
+    recovery = "In Astra, invoke $spectra and point it at this session directory."
+else:
+    prompt = (
+        f"Use the {skill} skill as moderator for this Spectra session. "
+        f"Tier: {tier}. Topic: {topic}. Session directory: {session_dir}. "
+        "Follow the skill's blackboard protocol; do not skip the confirmation gate."
+    )
+    waiting = f"Waiting for the Claude Code moderator to load {skill}."
+    recovery = "Paste the prompt from launch.json into Claude Code and resume from Phase 0."
+
+lock = {
+    "session_id": session_id,
+    "tier": tier,
+    "ttl_minutes": int(ttl),
+    "started_at": now,
+    "host": host,
+}
+launch = {
+    "host": host,
+    "skill": skill,
+    "tier": tier,
+    "topic": topic,
+    "session_id": session_id,
+    "session_dir": session_dir,
+    "prompt": prompt,
+}
+
+with open(os.path.join(session_dir, "session.lock"), "w", encoding="utf-8") as handle:
+    json.dump(lock, handle, indent=2)
+    handle.write("\n")
+with open(os.path.join(session_dir, "launch.json"), "w", encoding="utf-8") as handle:
+    json.dump(launch, handle, indent=2)
+    handle.write("\n")
+with open(os.path.join(session_dir, "session-state.md"), "w", encoding="utf-8") as handle:
+    handle.write(
+        f"## Session\n\n"
+        f"- **Session ID**: {session_id}\n"
+        f"- **Phase**: host-launch\n"
+        f"- **Host**: {host}\n"
+        f"- **Skill**: {skill}\n\n"
+        f"## Current Phase\n\n"
+        f"{waiting}\n\n"
+        f"## Recovery Instructions\n\n"
+        f"{recovery}\n"
+    )
+PY
+
+  echo "host: $normalized_host"
+  echo "skill: $skill"
+  echo "tier: $tier"
+  echo "session_dir: $session_dir"
+  if [[ "$normalized_host" == "astra" ]]; then
+    echo "prompt: \$spectra ${skill} topic=${topic} session_dir=${session_dir}"
+  else
+    echo "prompt: Use the ${skill} skill as moderator for this Spectra session. Tier: ${tier}. Topic: ${topic}. Session directory: ${session_dir}."
+  fi
+}
+
+cmd_gate() {
+  local here source gate
+  source="${BASH_SOURCE[0]}"
+  while [[ -L "$source" ]]; do
+    here="$(cd "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    [[ "$source" != /* ]] && source="$here/$source"
+  done
+  here="$(cd "$(dirname "$source")" && pwd)"
+  gate="$here/gate.sh"
+  if [[ ! -f "$gate" ]]; then
+    log_error "gate helper not found: $gate"
+    exit 2
+  fi
+  bash "$gate" "$@"
+}
+
 cmd_help() {
   cat <<EOF
 spectra — Spectra CLI for managing multi-agent skills
@@ -1121,6 +1539,11 @@ Commands:
   unlink            Revert to release mode
   status            Show installation status
   doctor            Diagnose and suggest fixes
+  budget [options]  Show local usage; budget calibrate recommends lower caps
+  runtime ...       Inspect, preview, or execute a local agent runtime adapter
+  how               How to run a session on each host
+  run <skill>       Prepare a session and print host launch instructions
+  gate              Fail the run if an AGENTS.md constraint is violated
   backup list       List settings.json backups
   backup restore    Restore a settings.json backup
   version           Show version
@@ -1152,6 +1575,11 @@ main() {
     unlink)           cmd_unlink "$@" ;;
     status)           cmd_status "$@" ;;
     doctor)           cmd_doctor "$@" ;;
+    budget)           cmd_budget "$@" ;;
+    runtime)          cmd_runtime "$@" ;;
+    how)              cmd_how "$@" ;;
+    run)              cmd_run "$@" ;;
+    gate)             cmd_gate "$@" ;;
     backup)           cmd_backup "$@" ;;
     help|--help|-h)   cmd_help ;;
     version|--version|-v) cmd_version ;;

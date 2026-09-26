@@ -1,0 +1,587 @@
+{
+  "policy_version": "1.0.0",
+  "policies": [
+    {
+      "policy_version": "1.0.0",
+      "skill": "deep-design",
+      "tier": "quick",
+      "limits": {
+        "default_core_agents": 3,
+        "max_core_agents": 4,
+        "default_specialists": 0,
+        "max_specialists": 0,
+        "max_active_agents": 4,
+        "included_rounds": 0,
+        "max_rounds": 0,
+        "max_output_kb": 50,
+        "max_wall_seconds": 180,
+        "max_agent_spawns": 4,
+        "max_model_calls": 7,
+        "reserved_finalization_calls": 1
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": false,
+        "verification": false
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "scout"
+        ],
+        "frontier_phases": [],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 2,
+        "final_position_cycles": 0
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "deep-design",
+      "tier": "standard",
+      "limits": {
+        "default_core_agents": 6,
+        "max_core_agents": 8,
+        "default_specialists": 0,
+        "max_specialists": 2,
+        "max_active_agents": 10,
+        "included_rounds": 1,
+        "max_rounds": 1,
+        "max_output_kb": 150,
+        "max_wall_seconds": 600,
+        "max_agent_spawns": 30,
+        "max_model_calls": 37,
+        "reserved_finalization_calls": 3
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": true,
+        "verification": true
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "scout",
+          "discussion",
+          "final-positions",
+          "verification"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 4,
+        "final_position_cycles": 1
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "deep-design",
+      "tier": "deep",
+      "limits": {
+        "default_core_agents": 10,
+        "max_core_agents": 10,
+        "default_specialists": 2,
+        "max_specialists": 5,
+        "max_active_agents": 15,
+        "included_rounds": 2,
+        "max_rounds": 3,
+        "max_output_kb": 300,
+        "max_wall_seconds": 1200,
+        "max_agent_spawns": 75,
+        "max_model_calls": 82,
+        "reserved_finalization_calls": 3
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": true,
+        "verification": true
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "scout",
+          "discussion",
+          "final-positions",
+          "verification"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 4,
+        "final_position_cycles": 1
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "decision-board",
+      "tier": "quick",
+      "limits": {
+        "default_core_agents": 2,
+        "max_core_agents": 3,
+        "default_specialists": 0,
+        "max_specialists": 0,
+        "max_active_agents": 3,
+        "included_rounds": 0,
+        "max_rounds": 0,
+        "max_output_kb": 50,
+        "max_wall_seconds": 180,
+        "max_agent_spawns": 3,
+        "max_model_calls": 6,
+        "reserved_finalization_calls": 1
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": false,
+        "verification": false
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "scout"
+        ],
+        "frontier_phases": [],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 2,
+        "final_position_cycles": 0
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "decision-board",
+      "tier": "standard",
+      "limits": {
+        "default_core_agents": 5,
+        "max_core_agents": 6,
+        "default_specialists": 0,
+        "max_specialists": 2,
+        "max_active_agents": 8,
+        "included_rounds": 1,
+        "max_rounds": 2,
+        "max_output_kb": 150,
+        "max_wall_seconds": 600,
+        "max_agent_spawns": 32,
+        "max_model_calls": 39,
+        "reserved_finalization_calls": 3
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": true,
+        "verification": true
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "scout",
+          "discussion",
+          "final-positions",
+          "verification"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 4,
+        "final_position_cycles": 1
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "decision-board",
+      "tier": "deep",
+      "limits": {
+        "default_core_agents": 7,
+        "max_core_agents": 8,
+        "default_specialists": 1,
+        "max_specialists": 4,
+        "max_active_agents": 12,
+        "included_rounds": 2,
+        "max_rounds": 3,
+        "max_output_kb": 300,
+        "max_wall_seconds": 1200,
+        "max_agent_spawns": 60,
+        "max_model_calls": 67,
+        "reserved_finalization_calls": 3
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": true,
+        "verification": true
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "scout",
+          "discussion",
+          "final-positions",
+          "verification"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 4,
+        "final_position_cycles": 1
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "peer-review",
+      "tier": "quick",
+      "limits": {
+        "default_core_agents": 3,
+        "max_core_agents": 4,
+        "default_specialists": 0,
+        "max_specialists": 0,
+        "max_active_agents": 4,
+        "included_rounds": 0,
+        "max_rounds": 0,
+        "max_output_kb": 50,
+        "max_wall_seconds": 300,
+        "max_agent_spawns": 4,
+        "max_model_calls": 7,
+        "reserved_finalization_calls": 1
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": false,
+        "verification": false
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "scout"
+        ],
+        "frontier_phases": [],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 2,
+        "final_position_cycles": 0
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "peer-review",
+      "tier": "standard",
+      "limits": {
+        "default_core_agents": 5,
+        "max_core_agents": 6,
+        "default_specialists": 0,
+        "max_specialists": 2,
+        "max_active_agents": 8,
+        "included_rounds": 1,
+        "max_rounds": 1,
+        "max_output_kb": 150,
+        "max_wall_seconds": 900,
+        "max_agent_spawns": 24,
+        "max_model_calls": 30,
+        "reserved_finalization_calls": 2
+      },
+      "optional_phases": {
+        "research": true,
+        "composition": true,
+        "verification": true
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "scout",
+          "research",
+          "discussion",
+          "final-positions",
+          "verification"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 4,
+        "final_position_cycles": 1
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "peer-review",
+      "tier": "deep",
+      "limits": {
+        "default_core_agents": 7,
+        "max_core_agents": 8,
+        "default_specialists": 1,
+        "max_specialists": 4,
+        "max_active_agents": 12,
+        "included_rounds": 2,
+        "max_rounds": 2,
+        "max_output_kb": 300,
+        "max_wall_seconds": 1800,
+        "max_agent_spawns": 48,
+        "max_model_calls": 54,
+        "reserved_finalization_calls": 2
+      },
+      "optional_phases": {
+        "research": true,
+        "composition": true,
+        "verification": true
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "scout",
+          "research",
+          "discussion",
+          "final-positions",
+          "verification"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 4,
+        "final_position_cycles": 1
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "trust-layer",
+      "tier": "quick",
+      "limits": {
+        "default_core_agents": 3,
+        "max_core_agents": 3,
+        "default_specialists": 0,
+        "max_specialists": 0,
+        "max_active_agents": 3,
+        "included_rounds": 0,
+        "max_rounds": 0,
+        "max_output_kb": 40,
+        "max_wall_seconds": 120,
+        "max_agent_spawns": 3,
+        "max_model_calls": 5,
+        "reserved_finalization_calls": 1
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": false,
+        "verification": false
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "package-validation"
+        ],
+        "frontier_phases": [],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 1,
+        "final_position_cycles": 0
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "trust-layer",
+      "tier": "standard",
+      "limits": {
+        "default_core_agents": 4,
+        "max_core_agents": 4,
+        "default_specialists": 0,
+        "max_specialists": 0,
+        "max_active_agents": 4,
+        "included_rounds": 1,
+        "max_rounds": 1,
+        "max_output_kb": 80,
+        "max_wall_seconds": 300,
+        "max_agent_spawns": 8,
+        "max_model_calls": 10,
+        "reserved_finalization_calls": 1
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": false,
+        "verification": false
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "package-validation",
+          "discussion"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 1,
+        "final_position_cycles": 0
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "trust-layer",
+      "tier": "deep",
+      "limits": {
+        "default_core_agents": 4,
+        "max_core_agents": 4,
+        "default_specialists": 0,
+        "max_specialists": 0,
+        "max_active_agents": 4,
+        "included_rounds": 2,
+        "max_rounds": 2,
+        "max_output_kb": 120,
+        "max_wall_seconds": 600,
+        "max_agent_spawns": 12,
+        "max_model_calls": 14,
+        "reserved_finalization_calls": 1
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": false,
+        "verification": false
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "package-validation",
+          "discussion"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 1,
+        "final_position_cycles": 0
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "coherence-monitor",
+      "tier": "quick",
+      "limits": {
+        "default_core_agents": 2,
+        "max_core_agents": 2,
+        "default_specialists": 0,
+        "max_specialists": 0,
+        "max_active_agents": 2,
+        "included_rounds": 0,
+        "max_rounds": 0,
+        "max_output_kb": 40,
+        "max_wall_seconds": 120,
+        "max_agent_spawns": 2,
+        "max_model_calls": 4,
+        "reserved_finalization_calls": 1
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": false,
+        "verification": false
+      },
+      "model_policy": {
+        "default": "cheap",
+        "cheap_phases": [
+          "opening"
+        ],
+        "frontier_phases": [],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 1,
+        "final_position_cycles": 0
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "coherence-monitor",
+      "tier": "standard",
+      "limits": {
+        "default_core_agents": 4,
+        "max_core_agents": 4,
+        "default_specialists": 0,
+        "max_specialists": 0,
+        "max_active_agents": 4,
+        "included_rounds": 1,
+        "max_rounds": 1,
+        "max_output_kb": 80,
+        "max_wall_seconds": 300,
+        "max_agent_spawns": 8,
+        "max_model_calls": 10,
+        "reserved_finalization_calls": 1
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": false,
+        "verification": false
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "discussion"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 1,
+        "final_position_cycles": 0
+      }
+    },
+    {
+      "policy_version": "1.0.0",
+      "skill": "coherence-monitor",
+      "tier": "deep",
+      "limits": {
+        "default_core_agents": 4,
+        "max_core_agents": 4,
+        "default_specialists": 0,
+        "max_specialists": 0,
+        "max_active_agents": 4,
+        "included_rounds": 2,
+        "max_rounds": 2,
+        "max_output_kb": 120,
+        "max_wall_seconds": 600,
+        "max_agent_spawns": 12,
+        "max_model_calls": 14,
+        "reserved_finalization_calls": 1
+      },
+      "optional_phases": {
+        "research": false,
+        "composition": false,
+        "verification": false
+      },
+      "model_policy": {
+        "default": "standard",
+        "cheap_phases": [
+          "discussion"
+        ],
+        "frontier_phases": [
+          "synthesis"
+        ],
+        "frontier_requires_approval": true
+      },
+      "planning": {
+        "fixed_model_calls": 1,
+        "final_position_cycles": 0
+      }
+    }
+  ]
+}

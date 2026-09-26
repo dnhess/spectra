@@ -86,6 +86,12 @@ teardown() { _common_teardown; }
   [[ -f "$CLAUDE_HOME/settings.json" ]]
   run grep "json-write.sh" "$CLAUDE_HOME/settings.json"
   assert_success
+  run grep "budget-policy.sh" "$CLAUDE_HOME/settings.json"
+  assert_success
+  run grep "budget-metrics.sh" "$CLAUDE_HOME/settings.json"
+  assert_success
+  run grep "budget-report.sh" "$CLAUDE_HOME/settings.json"
+  assert_success
 }
 
 @test "link fails if already in dev mode" {

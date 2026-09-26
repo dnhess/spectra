@@ -150,6 +150,10 @@ sys.exit(1)
     cp "$SPECTRA_HOME/skills/bin/json-write.sh" "$SPECTRA_HOME/bin/json-write.sh"
     chmod +x "$SPECTRA_HOME/bin/json-write.sh"
   fi
+  if [[ -f "$SPECTRA_HOME/skills/bin/gate.sh" ]]; then
+    cp "$SPECTRA_HOME/skills/bin/gate.sh" "$SPECTRA_HOME/bin/gate.sh"
+    chmod +x "$SPECTRA_HOME/bin/gate.sh"
+  fi
   rm -rf "$SPECTRA_HOME/skills/bin"
 
   echo "$version" > "$SPECTRA_HOME/version"
@@ -195,6 +199,9 @@ spectra_perms = [
     'Bash(bash ~/.spectra/bin/json-write.sh *)',
     'Bash(bash ~/.claude/skills/shared/tools/jsonl-utils.sh *)',
     'Bash(bash ~/.claude/skills/shared/tools/db-utils.sh *)',
+    'Bash(bash ~/.claude/skills/shared/tools/budget-policy.sh *)',
+    'Bash(bash ~/.claude/skills/shared/tools/budget-metrics.sh *)',
+    'Bash(bash ~/.claude/skills/shared/tools/budget-report.sh *)',
     'Write(~/.spectra/sessions/**)',
     'Read(~/.spectra/sessions/**)',
     'Glob(~/.spectra/sessions/**)',
