@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- CI runs `spectra gate .` on every pull request and push to main, and `spectra gate --diff` on the pull request change
+- `spectra gate --diff` ignores the constraints file and does not treat `must-contain` as a property of one change. Run `spectra gate .` for tree invariants
+- `spectra gate` can scan a directory. `must-not-contain` fails if any file matches. `must-contain` passes if any file matches. The constraints file itself is not scanned
+- `spectra gate` fails a local run when a file or diff violates literal `must-not-contain:` or `must-contain:` rules in AGENTS.md. No constraints exits 2. A pass prints `gate: pass`
+- Plugin first-run pack: worker prompt template, richer Quick persona briefs, and a decision-board synthesis example so the first `$spectra` / Claude install has a shape to copy
+- `spectra how` and `spectra run <skill>` so the CLI explains host launch and
+  prepares a Claude-hosted session directory instead of implying the CLI runs
+  the panel. Astra/GPT-6, Codex, and Hermes are refused with explicit next steps
+- Self-contained `plugin/` package (Agent Skills + Claude + Codex manifests).
+  Claude: `/plugin marketplace add dnhess/spectra` then `/plugin install spectra@spectra`.
+  Codex/Astra: `.agents/plugins/marketplace.json` or copy `plugin/skills/spectra`.
+  No CLI required for the default path
 - Versioned provider-neutral runtime contracts for graph dependencies, logical paths, join
   policies, retries, budgets, and runtime capability discovery
 - Codex adapter with strict validation, rendering, diagnostics, inert local dry runs, and an
@@ -36,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Moderator join is file polling of `opening/*.json`, not waiting on host chat or subagent-completion messages
 - Project positioning now treats Claude Code as the current default adapter rather than the
   permanent orchestration boundary
 - Investigation of the synthetic Codex smoke found model-visible bundled skills and unrelated

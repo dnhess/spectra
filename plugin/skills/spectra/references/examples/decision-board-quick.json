@@ -1,0 +1,17 @@
+{
+  "workflow": "decision-board",
+  "topic": "require-mfa",
+  "tier": "quick",
+  "persona_count": 4,
+  "recommendation": "Require MFA for admin roles now; all users in v2, gated on a measured onboarding-friction budget.",
+  "dissent": "devils-advocate: delaying user MFA leaves a known account-takeover path in production until v2 actually ships.",
+  "conditions": [
+    "Admin MFA enforced before the next production deploy",
+    "v2 user MFA has an owner, date, and a kill criterion if onboarding conversion drops more than 5%"
+  ],
+  "options_considered": [
+    "MFA for all users now",
+    "MFA for admin roles only",
+    "MFA for admins now, all users in v2"
+  ]
+}
