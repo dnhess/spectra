@@ -22,12 +22,13 @@ teardown() {
   [[ "$plugin_line" -lt "$skills_line" ]]
 }
 
-@test "governor does not inherit the parent model" {
+@test "governor does not treat a same-model worker as grunt" {
   skill="$PROJECT_ROOT/plugin/skills/spectra/SKILL.md"
   proto="$PROJECT_ROOT/plugin/skills/spectra/references/protocol.md"
-  grep -q "Do not inherit this thread's model" "$skill" "$proto"
-  grep -q "haiku" "$proto"
-  grep -q "gpt-6-luna" "$proto"
+  grep -q "this thread's model" "$skill" "$proto"
+  grep -q "Haiku or Sonnet" "$proto"
+  grep -q "blanket Haiku pin" "$proto"
+  ! grep -q "gpt-6-luna" "$skill" "$proto"
 }
 
 @test "Claude marketplace points at the self-contained plugin folder" {

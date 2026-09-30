@@ -4,22 +4,22 @@ The host thread is expensive. Workers are cheap. Files are the join signal.
 
 ## Classes
 
-- **economical** — search, read, summarize, tests, boilerplate. Must be a subagent. Smallest/fastest model the host offers.
+- **economical** — search, read, summarize, tests, boilerplate. Must be a subagent on a cheaper tier than this thread. Not necessarily the smallest model.
 - **standard** — bounded implementation or review. Subagent. Mid-tier if available, else economical.
 - **frontier** — plan, architecture, conflict, final merge of disagreeing workers. This thread only, after user approval.
 
 Default: if unsure, `economical`. Never upgrade a step to `frontier` without asking.
 
-## Model pin
+## Model rule
 
-Do not inherit this thread's model. Host defaults do that, so "just delegate"
-still spends frontier tokens on grunt work.
+Claude already mixes models when you ask it to orchestrate. A spawn can pass
+Haiku, Sonnet, or Opus. Do not replace that with a blanket Haiku pin.
 
-- Claude economical: `haiku`. Claude standard: `sonnet`.
-- Codex: the faster lower-cost model, not the parent. Codex subagent docs
-  currently name `gpt-6-luna`. Use a lower reasoning effort too.
-- If that id is gone, use whatever the host documents as cheaper than this
-  thread. If you cannot pin one, stop. Do not run the step here.
+- Grunt work stays off this thread's model. On Claude, Haiku or Sonnet.
+- A worker on this thread's model is `frontier`. Ask before it runs.
+- Codex inherits the parent model unless the spawn sets one. Set a cheaper
+  model for grunt work, or ask. Do not assume Claude's mix applies there.
+- If the host cannot spawn at all, stop. Do not do the grep on this thread.
 
 ## Caps (proxy, not dollars)
 
