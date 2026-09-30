@@ -11,6 +11,25 @@ teardown() {
   _common_teardown
 }
 
+@test "README sells the governor plugin, not the fat skill catalog" {
+  readme="$PROJECT_ROOT/README.md"
+  head -n 40 "$readme" | grep -q "governor plugin"
+  grep -q "Why not just ask the host" "$readme"
+  grep -q "not a debate panel" "$readme"
+  # Fat skills stay, but after the product pitch.
+  plugin_line=$(grep -n "governor plugin" "$readme" | head -n 1 | cut -d: -f1)
+  skills_line=$(grep -n "Opt-in panels" "$readme" | head -n 1 | cut -d: -f1)
+  [[ "$plugin_line" -lt "$skills_line" ]]
+}
+
+@test "governor does not inherit the parent model" {
+  skill="$PROJECT_ROOT/plugin/skills/spectra/SKILL.md"
+  proto="$PROJECT_ROOT/plugin/skills/spectra/references/protocol.md"
+  grep -q "Do not inherit this thread's model" "$skill" "$proto"
+  grep -q "haiku" "$proto"
+  grep -q "gpt-6-luna" "$proto"
+}
+
 @test "Claude marketplace points at the self-contained plugin folder" {
   run python3 - "$PROJECT_ROOT/.claude-plugin/marketplace.json" <<'PY'
 import json, sys

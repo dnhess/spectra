@@ -20,7 +20,7 @@ Do not implement the user's whole task yourself. Do not spawn a persona debate u
 
 1. Write `plan.json`: split the task into steps. Label each `economical`, `standard`, or `frontier`.
 2. **Ask the user before any `frontier` step.** Initial plan approval covers listed frontier steps only. New frontier work needs a new yes.
-3. Spawn **one cheap subagent per `economical`/`standard` step** that can run in parallel. Give each a single goal and an output path under `workers/<id>.json`. Workers do **not** chat with the governor. If they cannot finish, they write `ok: false` and `escalate: "frontier"` in that file; you handle it on join.
+3. Spawn **one cheap subagent per `economical`/`standard` step** that can run in parallel. **Do not inherit this thread's model.** On Claude, set economical workers to `haiku` and standard workers to `sonnet`. On Codex, set the host's faster lower-cost model (docs currently name `gpt-6-luna`) and a lower reasoning effort. If you cannot pin a cheaper model, stop. Give each worker a single goal and an output path under `workers/<id>.json`. Workers do **not** chat with the governor. If they cannot finish, they write `ok: false` and `escalate: "frontier"` in that file; you handle it on join.
 4. **Do not wait on host chat, callbacks, or “subagent finished” messages.** Join by polling `workers/<id>.json` (and `opening/*.json` if a deliberation opt-in is running) until expected files parse or the deadline hits.
 5. Stay on this thread for `frontier` steps after approval. Merge worker files. Write `summary.json`.
 6. If the next spawn would blow caps in [references/protocol.md](references/protocol.md), skip or shrink the step. Never kill in-flight workers.

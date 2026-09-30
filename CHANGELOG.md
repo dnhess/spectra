@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README leads with the governor plugin. Fat skills are maintainer opt-in. Spawn rule: do not inherit the parent model; pin the host's cheaper model or stop
+
 ## [0.5.0] - 2026-09-30
 
 ### Added
