@@ -10,6 +10,17 @@ The host thread is expensive. Workers are cheap. Files are the join signal.
 
 Default: if unsure, `economical`. Never upgrade a step to `frontier` without asking.
 
+## Model pin
+
+Do not inherit this thread's model. Host defaults do that, so "just delegate"
+still spends frontier tokens on grunt work.
+
+- Claude economical: `haiku`. Claude standard: `sonnet`.
+- Codex: the faster lower-cost model, not the parent. Codex subagent docs
+  currently name `gpt-6-luna`. Use a lower reasoning effort too.
+- If that id is gone, use whatever the host documents as cheaper than this
+  thread. If you cannot pin one, stop. Do not run the step here.
+
 ## Caps (proxy, not dollars)
 
 Do not claim token or dollar cost. Enforce observable ceilings:

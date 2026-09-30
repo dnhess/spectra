@@ -1,13 +1,14 @@
 # Spectra
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Lint](https://github.com/dnhess/spectra/actions/workflows/lint.yml/badge.svg)](https://github.com/dnhess/spectra/actions/workflows/lint.yml)
+A **governor plugin** for Codex and Claude. This thread plans and decides.
+Cheap subagents do search, tests, and boilerplate. Frontier work waits for
+your yes.
 
-A local-first **governor** for frontier agents. Codex or Claude stays on the
-expensive thread; Spectra routes scout and grunt work to cheap subagents
-and asks before any frontier call.
+It is not a second agent fleet, and it is not a debate panel. If the host
+cannot spawn a cheaper worker, Spectra stops. It does not do the grunt work
+on the expensive model.
 
-## Install (this is the whole thing)
+## Install
 
 ### Claude Code
 
@@ -18,91 +19,132 @@ and asks before any frontier call.
 
 Then: `Use Spectra to keep Claude from doing the grep itself.`
 
-### Codex / Claude
+### Codex
 
-If this repo is the workspace, enable the Spectra plugin from the local
-marketplace (`.agents/plugins/marketplace.json`). Or copy
-`plugin/skills/spectra` to `~/.agents/skills/spectra` and restart Codex.
+If this repo is the workspace, enable the Spectra plugin from
+`.agents/plugins/marketplace.json`. Or copy `plugin/skills/spectra` to
+`~/.agents/skills/spectra` and restart Codex.
 
 Then: `$spectra split this task — cheap workers, ask before frontier.`
 
-No `spectra` CLI. No curl installer. The package is `plugin/` — one Agent
-Skill plus Claude and Codex manifests.
+No `spectra` CLI. No curl installer. The package is `plugin/`.
 
-The old `install.sh` / `~/.claude/skills` path still exists for maintainers
-of the original five fat Claude skills.
+## What it does
 
-## Available Skills
+1. Split the task into `economical`, `standard`, and `frontier` steps.
+2. Spawn one cheap subagent per grunt step. Do not inherit this thread's model.
+3. Ask before any frontier step. A new frontier step needs a new yes.
+4. Join by polling `workers/<id>.json`. Do not wait on chat.
+5. Stop if the host cannot pin a cheaper model or cannot spawn.
 
-### deep-design
-**Rigorous multi-perspective design review.** Use when a document, spec, or idea needs stress-testing from every angle before implementation. Produces a revised document with all findings incorporated.
+Workers do not message the governor. If they are stuck they write
+`escalate: "frontier"` and stop.
 
-Triggers: design docs, architecture specs, product requirements, feature proposals.
+## Why not just ask the host?
 
-### decision-board
-**Structured multi-perspective debate.** Use when a decision needs structured debate before committing. Produces an Architecture Decision Record (ADR) with recommendation, dissent, and conditions.
+Asking Codex or Claude to "be the orchestrator" already works, and it is the
+mechanism Spectra uses. It is not a governor.
 
-Triggers: architectural decisions, technology selection, build-vs-buy, migration strategy.
+- Claude Code subagents exist so side work stays out of the main thread, and
+  you can pin a cheaper model such as Haiku.
+  [Subagents](https://code.claude.com/docs/en/sub-agents).
+  Built-in Explore used to run on Haiku. As of v2.1.198 it inherits the main
+  conversation's model. Omitting `model` follows Claude's subagent model
+  order, which is often the session model.
+- Claude agent teams are a different job. Teammates message each other and
+  use significantly more tokens than one session. Use subagents for focused
+  workers; use teams only when agents must argue with each other.
+  [Agent teams](https://code.claude.com/docs/en/agent-teams).
+  Spectra does not create a team.
+- Codex subagents also exist, including when a skill asks for them. Each
+  subagent does its own model and tool work, so the workflow consumes more
+  tokens than one agent unless you set a cheaper model. If you do not, the
+  subagent inherits the parent model and reasoning effort. Codex currently
+  documents `gpt-6-luna` as the faster, lower-cost option for lighter work.
+  [Subagents](https://developers.openai.com/codex/subagents).
 
-### peer-review
-**Multi-perspective code review.** Use when code changes need thorough review from multiple specialist viewpoints before merge. Includes a Scout + Research reconnaissance phase that gathers codebase context and best practices before reviewers begin.
+A prompt that says "delegate" does not pin the model, does not ask before
+frontier spend, and does not stop when the host cannot spawn. That contract
+is the plugin. A new orchestration runtime would duplicate the host and
+spend more.
 
-Triggers: pull requests, code changes, refactoring review.
+## What it is not
 
-### trust-layer
-**Adversarial verification for AI-generated output.** Use before accepting any AI-generated code, diff, file, or Spectra session recommendation. Four adversarial personas (Package Validator, Intent Auditor, Security Challenger, Coherence Checker) challenge the output from independent angles.
+- Not Claude agent teams, and not a desktop fleet or Kanban.
+- Not a judgment panel. Frontier hosts already judge. A persona debate is
+  opt-in and spends tokens.
+- Not smarter than the model on this thread.
 
-Triggers: AI-generated code, diffs, files, or Spectra session output needing verification before acceptance.
+## Opt-in panels
 
-### coherence-monitor
-**Metacognitive audit for long-running work.** Use at checkpoints during complex agent tasks or to audit a completed Spectra session before acting on its recommendation. Answers: "Am I still solving the right problem?"
+These in-tree skills are for maintainers, and only when you explicitly want
+a recorded panel. Do not install them to save money.
 
-Triggers: long-running agent checkpoints, mid-session drift detection, auditing completed Spectra sessions.
+- `deep-design` — design review
+- `decision-board` — recorded decision
+- `peer-review` — multi-perspective code review
+- `trust-layer` — adversarial check of AI output
+- `coherence-monitor` — drift check on a long session
 
-## Installation
+`install.sh` still links that tree under `~/.claude/skills/`. That is not
+the public install.
 
-Prefer the plugin commands in **Install** above. Maintainer CLI:
+## Maintainer reference
+
+Prefer the plugin commands above. The CLI prepares a session directory. It
+does not run models.
+
+```bash
+spectra how
+spectra run <skill>
+spectra status
+spectra update
+spectra doctor
+```
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dnhess/spectra/main/install.sh | bash
 ```
 
-That path is only for the original Claude Code skill tree under
-`~/.claude/skills/`.
+That path is only for the original Claude Code skill tree.
 
-### Developer setup
+### How the fat skills join
 
-For contributors working on Spectra itself:
+The in-tree skills coordinate on a file blackboard. Workers write JSON.
+The moderator polls. Workers do not chat. That ledger is the join signal,
+not a validator and not the product.
 
-```bash
-git clone https://github.com/dnhess/spectra.git
-cd spectra
-npm install && npm run prepare
-spectra link .
+```text
+Agents --(write JSON)--> session directory <--(poll)--> moderator
 ```
 
-### Management
+Output still goes through the 5-stage check (size, JSON, schema, sanitize,
+accept) before the moderator writes the event log. SQLite is scaffolded and
+not wired. JSONL is the active log. Budgets are proxy ceilings, not dollar
+accounting.
 
-```bash
-spectra how         # How to run a session on Claude vs Codex
-spectra run <skill> # Prepare a Claude-hosted session directory and print the prompt
-spectra gate --agents AGENTS.md <file>  # Fail if the file violates AGENTS.md constraints
-spectra gate --diff change.diff         # Same check against a unified diff
-spectra status      # Show installation info
-spectra budget      # Show local proxy-budget calibration data
-spectra budget calibrate --json  # Review lower-only recommendations after enough completed runs
-spectra update      # Update to latest release
-spectra doctor      # Diagnose issues
-spectra runtime list # Show available runtime adapters
-spectra runtime codex capabilities # Inspect Codex planning and bounded execution support
-spectra runtime codex inspect-context --codex-bin /absolute/path/to/codex # Redacted offline prompt fingerprint
-spectra uninstall   # Remove Spectra
+See `shared/orchestration.md` for the fat-skill protocol and
+`plugin/skills/spectra/references/protocol.md` for the governor.
+
+### Repository layout
+
+```text
+plugin/                  # public install: one Agent Skill
+  skills/spectra/        # governor
+deep-design/             # opt-in panel
+decision-board/
+peer-review/
+trust-layer/
+coherence-monitor/
+shared/                  # fat-skill protocol, not a skill
+bin/spectra              # maintainer CLI
+adapters/codex/          # nested Codex exec stays fail-closed
 ```
 
 ### Recommended permissions
 
-The installer configures these automatically. Manual setup is only needed
-for development from source. Add to `~/.claude/settings.json`:
+Only for the maintainer CLI install. Add to `~/.claude/settings.json` if you
+are not using `install.sh`:
 
 ```json
 {
@@ -124,147 +166,4 @@ for development from source. Add to `~/.claude/settings.json`:
 }
 ```
 
-These are scoped to session directories only — they don't affect permissions on your codebase.
-
-## Architecture
-
-All skills use the **blackboard architecture** for multi-agent coordination:
-
-```
-Agents ──(Write JSON file)──► Session Directory ◄──(Glob/Read)── Moderator
-```
-
-- **Agents** write structured JSON files to session subdirectories
-- **Moderator** (the active host agent) polls for files, reads results, writes the JSONL event log
-- **No SendMessage** for data exchange — files are the communication medium
-- **No coordinator agent** — the moderator drives the session directly
-
-This replaces the previous hub-and-spoke coordinator pattern, eliminating message delivery failures and coordinator stalling.
-
-Additional infrastructure:
-
-- **Scout agent** — every skill runs a pre-session Scout subagent (Phase 2.5) that writes `context-brief.json` to the session directory. Main agents read this file for project/subject context instead of re-gathering it independently, saving tokens at scale.
-- **Output validation** — 5-stage pipeline (size, JSON parse, schema, content sanitize, accept) validates all agent output before event log writes
-- **SQLite storage** (scaffolded, not yet wired) — hybrid storage layer alongside JSONL manifests for cross-session metadata queries. Schema, utilities, and tests exist but sessions do not yet populate the database. JSONL manifests are the active storage layer.
-- **Enforced session budgets** — a dry-run estimate is shown before execution, then observable proxy metrics enforce agent, model-call, round, output, and wall-time ceilings while reserving capacity for final synthesis and required verification
-- **Local budget calibration** — `spectra budget [--skill NAME] [--limit N] [--json]` summarizes
-  active, completed, interrupted, and legacy sessions without activating SQLite or claiming exact
-  token/dollar costs. Moderator-owned counters use torn-write-safe atomic replacement through
-  `budget-metrics.sh`, including explicit finalization-call accounting; updates must remain
-  serialized through the sole moderator. `spectra budget calibrate` uses only finalized,
-  Full-quality completed summaries, requires at least 20 matching runs across seven days, and
-  produces lower-only recommendations for manual review without editing policy.
-- **Quality KPIs** — per-session metrics (completion rate, convergence, specialist utilization, etc.) computed at session end (SQLite population pending)
-- **Skill composition** — skills can invoke other skills mid-session (e.g., deep-design invokes decision-board to resolve a deadlocked topic)
-- **Round summarization** — moderator produces condensed ~1000-token round briefs between discussion rounds, replacing raw position injection and reducing token growth from O(agents^2 x rounds^2) to O(agents x rounds)
-- **Tier-based model allocation** — routine scout, research, discussion, and reduction work uses cheaper models; frontier models are reserved for high-value synthesis or arbitration and require approval when configured
-- **Runtime adapter contract** — versioned graph, capability, logical-path, quorum, timeout,
-  retry, and budget metadata separates portable workflow intent from host-specific agent APIs.
-  The Codex adapter validates, renders, diagnoses, and dry-runs without invoking a model. Its
-  opt-in Quick peer-review executor stages only declared inputs, requires a digest-bound approval,
-  caps concurrency at two, validates structured artifacts, and serializes budget writes. Approved
-  execution sends staged inputs to the configured Codex model service; orchestration and artifacts
-  stay local. Workers now require a dedicated authenticated Codex profile and per-run isolated
-  homes. A one-worker synthetic smoke completed, but offline prompt rendering subsequently proved
-  that the desktop runtime injected bundled skills and unrelated orchestration instructions. The
-  executor now rejects such a runtime before approval and before every provider spawn. Execution
-  remains experimental pending a clean runtime attestation and stronger OS read isolation. See
-  [`docs/runtime-adapters.md`](docs/runtime-adapters.md).
-
-  An available but dormant manual clean-host diagnostic is
-  `.github/workflows/codex-clean-host-inspect.yml`: pinned Codex package version/native SHA,
-  Linux/amd64 GitHub-hosted network-disabled read-only container, sanitized host-bounded
-  evidence, no authentication/project/model/provider inputs, and a redacted evidence-only
-  report. It has not been run and cannot authorize execution. Docker daemon/kernel and
-  container-escape, diagnostic-evasion, exact-request, and OS read-isolation limits remain.
-
-## Context Persistence
-
-Sessions leave a trail for future sessions to build on:
-
-- **Checkpoints** — `session-state.md` written at each phase transition.
-  Enables recovery after Claude Code context compaction mid-session.
-- **Handoffs** — `handoff.md` written at session end with key findings,
-  unresolved items, and follow-up recommendations.
-- **Budget summaries** — `budget-summary.json` records planned versus observed proxy usage,
-  threshold pressure, blocked expansions, overshoots, and finalization-reserve use.
-- **Prior Context** — At session start, the moderator queries the manifest
-  for prior sessions on the same project and loads the most recent handoff.
-  Agents receive unresolved items so they don't repeat resolved findings.
-
-All persistence files use atomic writes (temp-then-rename) and content
-sanitization before injection into agent prompts.
-See `shared/orchestration.md` for the full protocol.
-
-## Repository Structure
-
-```
-spectra/
-  bin/
-    spectra                     # CLI script
-    json-write.sh               # Scoped JSON writer
-  README.md                     # This file
-  install.sh                    # Curl-based installer
-  shared/                       # Shared orchestration library (not a skill)
-    orchestration.md            # Blackboard protocol, polling, session management
-    event-schemas-base.md       # Common event types across all skills
-    composition.md              # Skill composition protocol (inter-skill invocation)
-    security.md                 # 4-layer defense, content isolation, audits
-    verification.md             # Lightweight 2-agent post-synthesis trust hook
-    tools/
-      jsonl-utils.sh            # JSONL query utility
-      db-utils.sh               # SQLite database utilities (WAL mode)
-      budget-policy.sh          # Session budget defaults, estimates, and checks
-      budget-policy.py          # Dependency-free budget policy engine
-      budget-metrics.sh         # Scoped serialized observed-usage updater
-      budget-metrics.py         # Dependency-free metrics update engine
-      budget-report.sh          # Scoped session summary/report wrapper
-      budget-report.py          # Local proxy-budget calibration reports
-      validate-output.sh        # 5-stage output validation pipeline
-    schemas/
-      budget-policies.json      # Per-skill and per-tier budget policy matrix
-      ...                       # JSON validation schemas for agent outputs
-    runtime/                    # Provider-neutral runtime schemas and fixtures
-  adapters/
-    codex/                      # Local-only Codex planning adapter
-  deep-design/                  # Design review skill
-    SKILL.md                    # Domain orchestration
-    event-schemas.md            # Domain-specific event types
-    personas/                   # 12 core + 10 specialist reviewers
-  decision-board/               # Decision debate skill
-    SKILL.md                    # Domain orchestration
-    event-schemas.md            # Domain-specific event types
-    personas/                   # 7 core + 9 specialist debaters
-  peer-review/                  # Code review skill
-    SKILL.md                    # Domain orchestration
-    event-schemas.md            # Domain-specific event types
-    personas/                   # 6 core + 6 specialist reviewers
-  trust-layer/                  # Adversarial verification skill
-    SKILL.md                    # Domain orchestration
-    event-schemas.md            # Domain-specific event types
-    personas/                   # 4 core verification personas
-  coherence-monitor/            # Metacognitive audit skill
-    SKILL.md                    # Domain orchestration
-    event-schemas.md            # Domain-specific event types
-    personas/                   # 4 core audit personas
-```
-
-## Adding New Skills
-
-To add a new multi-agent skill:
-
-1. Create a directory at the repo root (e.g., `my-skill/`)
-2. Add a `SKILL.md` that references `~/.claude/skills/shared/orchestration.md` for the blackboard protocol
-3. Add an `event-schemas.md` with domain-specific events, referencing `shared/event-schemas-base.md` for common types
-4. Add a `personas/` directory with agent persona files
-5. **Wire persistence** — reference the Persistence Protocol in `shared/orchestration.md`:
-   - Define your sentinel name (`.active-{skill-name}-session`)
-   - Define handoff content mapping for your domain
-   - Define which manifest field identifies repeat sessions
-   - Add checkpoint timing appropriate for your session phases
-6. **Add a Scout phase** — add a Phase 2.5 section between Team Setup and the Opening Round.
-   Define skill-specific gather instructions and a `skill_context` schema.
-   See `shared/orchestration.md > Scout Agent` for the template.
-7. Add the skill name to `KNOWN_SKILLS` in `bin/spectra`
-
-The shared infrastructure handles: session directory management, Scout context-gathering, polling protocol, JSONL event writing, output validation, synthesis pipeline, fault tolerance, context budget monitoring, quality KPIs, security, and context persistence.
+These are scoped to session directories. They do not grant codebase writes.
