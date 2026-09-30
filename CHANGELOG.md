@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-30
+
 ### Added
 
+- Release tarball includes `plugin/`, `.claude-plugin/`, and `.agents/` so `spectra update` can install the governor, not only the CLI skills
 - CI runs `spectra gate .` on every pull request and push to main, and `spectra gate --diff` on the pull request change
 - `spectra gate --diff` ignores the constraints file and does not treat `must-contain` as a property of one change. Run `spectra gate .` for tree invariants
 - `spectra gate` can scan a directory. `must-not-contain` fails if any file matches. `must-contain` passes if any file matches. The constraints file itself is not scanned

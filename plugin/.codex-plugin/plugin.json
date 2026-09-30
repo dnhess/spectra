@@ -1,6 +1,6 @@
 {
   "name": "spectra",
   "description": "Govern frontier sessions: cheap subagents for grunt work, approval for frontier calls.",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "skills": "./skills/"
 }
