@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- README leads with the governor plugin. Fat skills are maintainer opt-in. Spawn rule: do not inherit the parent model; pin the host's cheaper model or stop
+- README leads with the governor plugin. Fat skills are maintainer opt-in. Claude already mixes Opus, Sonnet, and Haiku; a same-model worker is frontier and needs a yes. Do not force every worker onto Haiku
 
 ## [0.5.0] - 2026-09-30
 

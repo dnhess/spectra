@@ -32,10 +32,10 @@ No `spectra` CLI. No curl installer. The package is `plugin/`.
 ## What it does
 
 1. Split the task into `economical`, `standard`, and `frontier` steps.
-2. Spawn one cheap subagent per grunt step. Do not inherit this thread's model.
+2. Spawn one subagent per grunt step on a cheaper tier than this thread. On Claude, Haiku or Sonnet. A same-model worker is frontier.
 3. Ask before any frontier step. A new frontier step needs a new yes.
 4. Join by polling `workers/<id>.json`. Do not wait on chat.
-5. Stop if the host cannot pin a cheaper model or cannot spawn.
+5. Stop if the host cannot spawn. Do not do the grunt work here.
 
 Workers do not message the governor. If they are stuck they write
 `escalate: "frontier"` and stop.
@@ -45,12 +45,14 @@ Workers do not message the governor. If they are stuck they write
 Asking Codex or Claude to "be the orchestrator" already works, and it is the
 mechanism Spectra uses. It is not a governor.
 
-- Claude Code subagents exist so side work stays out of the main thread, and
-  you can pin a cheaper model such as Haiku.
+- Claude already does the model split when you ask it to orchestrate and use
+  the right models. Main stays on the session model. Subagents run on Opus,
+  Sonnet, or Haiku, because the spawn can pass a model. That per-invocation
+  model wins over the subagent file and over the session model.
   [Subagents](https://code.claude.com/docs/en/sub-agents).
-  Built-in Explore used to run on Haiku. As of v2.1.198 it inherits the main
-  conversation's model. Omitting `model` follows Claude's subagent model
-  order, which is often the session model.
+  Spectra does not replace that. It treats a same-model worker as frontier
+  and asks first. Forcing every worker onto Haiku would be worse than the
+  mix you already get.
 - Claude agent teams are a different job. Teammates message each other and
   use significantly more tokens than one session. Use subagents for focused
   workers; use teams only when agents must argue with each other.
@@ -63,10 +65,10 @@ mechanism Spectra uses. It is not a governor.
   documents `gpt-6-luna` as the faster, lower-cost option for lighter work.
   [Subagents](https://developers.openai.com/codex/subagents).
 
-A prompt that says "delegate" does not pin the model, does not ask before
-frontier spend, and does not stop when the host cannot spawn. That contract
-is the plugin. A new orchestration runtime would duplicate the host and
-spend more.
+A prompt that says "delegate" already gets Claude's Opus / Sonnet / Haiku mix.
+It does not ask before an Opus worker, it does not stop when the host cannot
+spawn, and on Codex an unset spawn still inherits the parent model. That
+contract is the plugin. A new orchestration runtime would duplicate the host.
 
 ## What it is not
 
